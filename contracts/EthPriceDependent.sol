@@ -92,8 +92,8 @@ contract EthPriceDependent is usingOraclize, multiowned {
 
     // FIELDS
 
-    /// @notice usd price of ETH in cents
-    uint public m_ETHPriceInCents;
+    /// @notice usd price of ETH in cents, retrieved using oraclize
+    uint public m_ETHPriceInCents = 300*100; // TODO remove $300 (now for testing purposes)
     /// @notice unix timestamp of last update
     uint public m_ETHPriceLastUpdate;
 

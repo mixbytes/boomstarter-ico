@@ -90,7 +90,7 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         // same goes for USD amount
         m_currentTokensSold = m_currentTokensSold.add(tokenAmount);
         // for example 2e17 * 36900 / 1e18 = 7380, i.e. $73.80 
-        m_currentUsdInvested = m_currentUsdInvested.add( msg.value.mul(m_ETHPriceInCents).div(1 ether) );
+        m_currentUsdInvested = m_currentUsdInvested.add( payment.mul(m_ETHPriceInCents).div(1 ether) );
 
         m_token.frozenTransfer(investor, tokenAmount, c_thawTS, false);
 
