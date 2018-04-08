@@ -107,6 +107,6 @@ contract EthPriceDependent is usingOraclize, multiowned {
      *          should be set in the constructor
      */
     uint public m_CentsPerToken;
-    /// @dev Update ETH price in cents every 5 minutes
+    /// @dev Update ETH price in cents every 5 minutes TODO change to an hour
     uint public constant m_ETHPriceUpdateInterval = 5*60;
 }

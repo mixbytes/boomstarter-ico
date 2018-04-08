@@ -21,9 +21,12 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
     /**
      *  @dev checks that finish date is not reached yet
      *       (and potentially start date, but not needed for presale)
+     *       AND also that the limits for the sale are not met
      */
-    modifier onlyIfDateValid() {
-      require(m_dateTo >= now);
+    modifier checkLimitsAndDates() {
+      require((m_dateTo >= now) &&
+              (m_currentTokensSold < c_maximumTokensSold) &&
+              (m_currentUsdInvested < c_maximumUsdInvested));
       _;
     }
 
@@ -39,7 +42,7 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         EthPriceDependent(_owners, 2, _centsPerToken)
         validAddress(_token)
         validAddress(_beneficiary)
-        onlyIfDateValid
+        checkLimitsAndDates
     {
         m_token = IBoomstarterToken(_token);
         m_beneficiary = _beneficiary;
@@ -64,7 +67,7 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         payable
         nonReentrant
         onlyIfSaleIsActive
-        onlyIfDateValid
+        checkLimitsAndDates
         returns (uint)
     {
         address investor = msg.sender;
@@ -81,6 +84,13 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         // send ether to external wallet
         m_beneficiary.transfer(payment);
         FundTransfer(investor, payment, true);
+
+        // TODO check if the current amount turns out to be greater than the limit
+        // and ?? partially refund or something
+        // same goes for USD amount
+        m_currentTokensSold = m_currentTokensSold.add(tokenAmount);
+        // for example 2e17 * 36900 / 1e18 = 7380, i.e. $73.80 
+        m_currentUsdInvested = m_currentUsdInvested.add( msg.value.mul(m_ETHPriceInCents).div(1 ether) );
 
         m_token.frozenTransfer(investor, tokenAmount, c_thawTS, false);
 
@@ -147,4 +157,14 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
      *       you cannot buy anything, but finish can happen before, if owners decide to do so
      */
     uint public m_dateTo = 1529064000; // 15-Jun-18 12:00:00 UTC
+
+    /// @dev current amount of tokens sold
+    uint public m_currentTokensSold = 0;
+    /// @dev limit of tokens to be sold during presale (using ether because decimal is the same)
+    uint public c_maximumTokensSold = 15000000 ether; // 15 million tokens
+
+    /// @dev current amount of USD invested, in cents
+    uint public m_currentUsdInvested = 0;
+    /// @dev limit of USD to be invested during presale, in cents
+    uint public c_maximumUsdInvested = 600000 * 100; // $600,000 
 }
