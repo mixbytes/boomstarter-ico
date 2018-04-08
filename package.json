@@ -1,0 +1,24 @@
+{
+  "name": "boomstarter-ico",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mixbytes/boomstarter-ico.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mixbytes/boomstarter-ico/issues"
+  },
+  "homepage": "https://github.com/mixbytes/boomstarter-ico#readme",
+  "dependencies": {
+    "babel-polyfill": "^6.26.0",
+    "mixbytes-solidity": "^0.1.8",
+    "zeppelin-solidity": "1.2.0"
+  }
+}
