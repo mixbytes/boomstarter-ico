@@ -16,11 +16,10 @@ contract EthPriceDependent is usingOraclize, multiowned {
     /// @param _initialOwners set owners, which can control bounds and things
     ///        described in the actual sale contract, inherited from this one
     /// @param _consensus Number of votes enough to make a decision
-    function EthPriceDependent(address[] _initialOwners,  uint _consensus, uint _centsPerToken)
+    function EthPriceDependent(address[] _initialOwners,  uint _consensus)
         public
         multiowned(_initialOwners, _consensus)
     {
-        m_CentsPerToken = _centsPerToken;
         oraclize_setProof(proofType_TLSNotary);
         // Use it when testing with testrpc and etherium bridge. Don't forget to change address
         OAR = OraclizeAddrResolverI(0x6f485C8BF6fc43eA212E93BBF8ce046C7f1cb475);
@@ -53,7 +52,7 @@ contract EthPriceDependent is usingOraclize, multiowned {
 
         if (newPrice > m_ETHPriceLowerBound && newPrice < m_ETHPriceUpperBound) {
             m_ETHPriceInCents = newPrice;
-            m_ETHPriceLastUpdate = now;
+            m_ETHPriceLastUpdate = getTime();
             NewETHPrice(m_ETHPriceInCents);
             updateETHPriceInCents();
         } else {
@@ -86,14 +85,19 @@ contract EthPriceDependent is usingOraclize, multiowned {
         external
         onlymanyowners(keccak256(msg.data))
     {
-        require(now > m_ETHPriceLastUpdate + 2*m_ETHPriceUpdateInterval);
+        require(getTime() > m_ETHPriceLastUpdate + 2 * m_ETHPriceUpdateInterval);
         m_ETHPriceInCents = _price;
+    }
+
+    /// @dev to be overriden in tests
+    function getTime() internal view returns (uint) {
+        return now;
     }
 
     // FIELDS
 
     /// @notice usd price of ETH in cents, retrieved using oraclize
-    uint public m_ETHPriceInCents = 300*100; // TODO remove $300 (now for testing purposes)
+    uint public m_ETHPriceInCents = 0;
     /// @notice unix timestamp of last update
     uint public m_ETHPriceLastUpdate;
 
@@ -102,11 +106,6 @@ contract EthPriceDependent is usingOraclize, multiowned {
     /// @notice upper bound of the ETH price in cents
     uint public m_ETHPriceUpperBound = 100000000;
 
-    /**
-     *  @notice usd price of BoomstarterToken in cents
-     *          should be set in the constructor
-     */
-    uint public m_CentsPerToken;
-    /// @dev Update ETH price in cents every 5 minutes TODO change to an hour
-    uint public constant m_ETHPriceUpdateInterval = 5*60;
+    /// @dev Update ETH price in cents every hour
+    uint public constant m_ETHPriceUpdateInterval = 60*60;
 }

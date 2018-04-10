@@ -24,9 +24,8 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
      *       AND also that the limits for the sale are not met
      */
     modifier checkLimitsAndDates() {
-      require((m_dateTo >= now) &&
-              (m_currentTokensSold < c_maximumTokensSold) &&
-              (m_currentUsdInvested < c_maximumUsdInvested));
+      require((c_dateTo >= getTime()) &&
+              (m_currentTokensSold < c_maximumTokensSold));
       _;
     }
 
@@ -35,14 +34,13 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
      * @param _owners Addresses to do administrative actions
      * @param _token Address of token being sold in this presale
      * @param _beneficiary Address of the wallet, receiving all the collected ether
-     * @param _centsPerToken Price of token in US cents
      */
-    function BoomstarterPresale(address[] _owners, address _token, address _beneficiary, uint _centsPerToken)
+    function BoomstarterPresale(address[] _owners, address _token, address _beneficiary)
+        public
         payable
-        EthPriceDependent(_owners, 2, _centsPerToken)
+        EthPriceDependent(_owners, 2)
         validAddress(_token)
         validAddress(_beneficiary)
-        checkLimitsAndDates
     {
         m_token = IBoomstarterToken(_token);
         m_beneficiary = _beneficiary;
@@ -59,8 +57,9 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
     }
 
     /**
-     * @notice ICO participation
-     * @return number of Boomstarter tokens bought (with all decimal symbols)
+     * @notice presale participation. Can buy tokens only in batches by one price
+     *         if price changes mid-transaction, you'll get only the amount for initial price
+     *         and the rest will be refunded
      */
     function buy()
         public
@@ -68,33 +67,59 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         nonReentrant
         onlyIfSaleIsActive
         checkLimitsAndDates
-        returns (uint)
     {
         address investor = msg.sender;
         uint256 payment = msg.value;
-        require(payment >= c_MinInvestment);
+        require((payment.mul(getETHPriceInCents())).div(1 ether) >= getMinInvestmentInCents());
 
         /**
          * calculate amount based on ETH/USD rate
          * for example 2e17 * 36900 / 30 = 246 * 1e18
          * 0.2 eth buys 246 tokens if Ether price is $369 and token price is 30 cents
          */
-        uint tokenAmount = payment.mul(m_ETHPriceInCents).div(c_CentsPerToken);
+        uint tokenAmount;
+        // either hard cap or the amount where prices change
+        uint cap;
+        // price of the batch of token bought
+        uint centsPerToken;
+        if (m_currentTokensSold <= c_priceRiseTokenAmount) {
+          centsPerToken = c_centsPerTokenFirst;
+          // don't let price rise happen during this transaction - cap at price change value
+          cap = c_priceRiseTokenAmount;
+        } else {
+          centsPerToken = c_centsPerTokenSecond;
+          // capped by the presale cap itself
+          cap = c_maximumTokensSold;
+        }
+
+        // amount that can be bought depending on the price
+        tokenAmount = payment.mul(m_ETHPriceInCents).div(centsPerToken);
+
+        // number of tokens available before the cap is reached
+        uint maxTokensAllowed = cap.sub(m_currentTokensSold);
+
+        // if amount of tokens we can buy is more than the amount available
+        if (tokenAmount > maxTokensAllowed) {
+          // price of 1 full token in ether-wei
+          // example 30 * 1e18 / 36900 = 0.081 * 1e18 = 0.081 eth
+          uint ethPerToken = centsPerToken.mul(1 ether).div(m_ETHPriceInCents);
+          // change amount to maximum allowed
+          tokenAmount = maxTokensAllowed;
+          payment = ethPerToken.mul(tokenAmount).div(1 ether);
+        }
+
+        m_currentTokensSold = m_currentTokensSold.add(tokenAmount);
 
         // send ether to external wallet
         m_beneficiary.transfer(payment);
         FundTransfer(investor, payment, true);
 
-        // TODO check if the current amount turns out to be greater than the limit
-        // and ?? partially refund or something
-        // same goes for USD amount
-        m_currentTokensSold = m_currentTokensSold.add(tokenAmount);
-        // for example 2e17 * 36900 / 1e18 = 7380, i.e. $73.80 
-        m_currentUsdInvested = m_currentUsdInvested.add( payment.mul(m_ETHPriceInCents).div(1 ether) );
-
         m_token.frozenTransfer(investor, tokenAmount, c_thawTS, false);
 
-        return tokenAmount;
+        uint change;
+        change = msg.value.sub(payment);
+        if (change > 0)
+            investor.transfer(change);
     }
 
 
@@ -129,16 +154,26 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
     }
 
 
+    /// @dev to be overriden in tests
+    function getMinInvestmentInCents() view public returns (uint) {
+        return c_MinInvestmentInCents;
+    }
+
+    /// @dev to be overriden in tests
+    function getETHPriceInCents() view public returns (uint) {
+        return m_ETHPriceInCents;
+    }
+
     // FIELDS
 
     /// @notice usd price of BoomstarterToken in cents
     uint public constant c_CentsPerToken = 30;
 
     /// @dev unix timestamp at which all sold tokens should be unfrozen and available
-    uint public constant c_thawTS = 1523197029; // TODO set appropriate time
+    uint public constant c_thawTS = 1538395200; // 01-Oct-18 12:00:00 UTC
 
-    /// @notice minimum investment
-    uint public constant c_MinInvestment = 10 finney; // TODO check if needed
+    /// @notice minimum investment in cents
+    uint public constant c_MinInvestmentInCents = 30000 * 100; // $30k
 
     /// @dev contract responsible for token accounting
     IBoomstarterToken public m_token;
@@ -156,15 +191,17 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
      *  @dev unix timestamp that sets presale finish date, which means that after that date
      *       you cannot buy anything, but finish can happen before, if owners decide to do so
      */
-    uint public m_dateTo = 1529064000; // 15-Jun-18 12:00:00 UTC
+    uint public c_dateTo = 1529064000; // 15-Jun-18 12:00:00 UTC
 
     /// @dev current amount of tokens sold
     uint public m_currentTokensSold = 0;
     /// @dev limit of tokens to be sold during presale (using ether because decimal is the same)
-    uint public c_maximumTokensSold = 15000000 ether; // 15 million tokens
+    uint public c_maximumTokensSold = 15000000 * 10**18; // 15 million tokens
 
-    /// @dev current amount of USD invested, in cents
-    uint public m_currentUsdInvested = 0;
-    /// @dev limit of USD to be invested during presale, in cents
-    uint public c_maximumUsdInvested = 600000 * 100; // $600,000 
+    /// @notice first step, usd price of BoomstarterToken in cents 
+    uint public c_centsPerTokenFirst = 30; // $0.3
+    /// @notice second step, usd price of BoomstarterToken in cents
+    uint public c_centsPerTokenSecond = 40; // $0.4
+    /// @notice amount of tokens sold at which price switch should happen
+    uint public c_priceRiseTokenAmount = 666668 * 10**18;
 }

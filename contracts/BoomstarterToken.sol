@@ -464,7 +464,7 @@ contract BoomstarterToken is ArgumentsChecker, multiowned, BurnableToken, Standa
 
     // CONSTANTS
 
-    string public constant name = "Boomstarter token";
+    string public constant name = "BoomstarterCoin";
     string public constant symbol = "BC";
     uint8 public constant decimals = 18;
 
