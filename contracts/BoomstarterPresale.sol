@@ -82,7 +82,7 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         uint cap;
         // price of the batch of token bought
         uint centsPerToken;
-        if (m_currentTokensSold <= c_priceRiseTokenAmount) {
+        if (m_currentTokensSold < c_priceRiseTokenAmount) {
           centsPerToken = c_centsPerTokenFirst;
           // don't let price rise happen during this transaction - cap at price change value
           cap = c_priceRiseTokenAmount;

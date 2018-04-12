@@ -37,6 +37,10 @@ contract BoomstarterPresaleTestHelper is BoomstarterPresale {
       c_priceRiseTokenAmount = amount; // 7k tokens
     }
 
+    function setMaximumTokensSold(uint amount) public {
+      c_maximumTokensSold = amount; // 15k tokens
+    }
+
     /// @notice minimum investment in cents
     uint public constant c_MinInvestmentInCentsTest = 1 * 100; // $1
 
@@ -45,9 +49,6 @@ contract BoomstarterPresaleTestHelper is BoomstarterPresale {
      *       you cannot buy anything, but finish can happen before, if owners decide to do so
      */
     uint public c_dateTo = 1529064000; // 15-Jun-18 12:00:00 UTC
-
-    /// @dev limit of tokens to be sold during presale (using ether because decimal is the same)
-    uint public c_maximumTokensSold = 15000 * 10**18; // 15k tokens
 
     /// @dev Update ETH price in cents every minute
     uint public constant m_ETHPriceUpdateInterval = 60;
