@@ -24,6 +24,21 @@ async function instantiate(role, initial_balances_map) {
     return token;
 }
 
+/* for testing regular token functions after the end of ICO (all tokens unfrozen) */
+async function instantiateUnfrozen(role, initial_balances_map) {
+    const token = await BoomstarterToken.new([role.owner1], 1, {from: role.nobody});
+
+    for (const to_ in initial_balances_map)
+        await token.transfer(to_, initial_balances_map[to_], {from: role.nobody});
+
+    const remaining = await token.balanceOf(role.nobody);
+    await token.burn(remaining, {from: role.nobody});
+
+    await token.thaw({from: role.owner1});
+    return token;
+}
+
+
 // converts amount of token into token-wei (smallest token units)
 function BMTS(amount) {
     return web3.toWei(amount, 'ether');
@@ -31,7 +46,7 @@ function BMTS(amount) {
 
 contract('BoomstarterTokenTest', function(accounts) {
 
-    for (const [name, fn] of tokenUTest(accounts, instantiate, {
+    for (const [name, fn] of tokenUTest(accounts, instantiateUnfrozen, {
         burnable: true
     })) {
          it(name, fn);
@@ -47,7 +62,7 @@ contract('BoomstarterTokenTest', function(accounts) {
         initial_balances_map[owner2] = BMTS(3);
 
         const role = {owner1, nobody};
-        const token = await instantiate(role, initial_balances_map);
+        const token = await instantiateUnfrozen(role, initial_balances_map);
         const recipient = await TestApprovalRecipient.new(token.address, {from: nobody});
 
         await token.approveAndCall(recipient.address, BMTS(1), '', {from: owner1});
@@ -70,18 +85,13 @@ contract('BoomstarterTokenTest', function(accounts) {
 
         // constructing token
         const token = await BoomstarterTokenTestHelper.new([owner1, owner2, owner3], 2, {from: owner1});
-        await token.setTime(1520000000);
-        assertBigNumberEqual(await token.availableBalanceOf(owner1), BMTS(totalSupply));
         assertBigNumberEqual(await token.balanceOf(owner1), BMTS(totalSupply));
         assertBigNumberEqual(await token.totalSupply(), BMTS(totalSupply));
-
-        await token.setSale(owner1, true, {from: owner1});
-        await token.setSale(owner1, true, {from: owner2});  // 2nd signature
+        // NOTE: owner1 already has sale role (set in constructor)
 
         // early investment
-        await token.frozenTransfer(holder2, BMTS(40), 1560000000, false, {from: owner1});
+        await token.transfer(holder2, BMTS(40), {from: owner1});
         assertBigNumberEqual(await token.balanceOf(holder2), BMTS(40));
-        assertBigNumberEqual(await token.availableBalanceOf(holder2), BMTS(0));
         await expectThrow(token.transfer(nobody, BMTS(1), {from: holder2}));  // can't sell yet
 
         // ok, now it's ico time
@@ -90,306 +100,81 @@ contract('BoomstarterTokenTest', function(accounts) {
         await token.setSale(ico, true, {from: owner2});  // 2nd signature
 
         // minting by ico to an holder
-        await token.frozenTransfer(holder1, BMTS(20), 1550000000, false, {from: ico});
+        await token.transfer(holder1, BMTS(20), {from: ico});
         assertBigNumberEqual(await token.balanceOf(holder1), BMTS(20));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(0));
 
         await expectThrow(token.transfer(nobody, BMTS(1), {from: holder1}));  // both holders..
-        await expectThrow(token.transfer(nobody, BMTS(1), {from: holder2}));  // ..can't sell yet
+        await expectThrow(token.transfer(nobody, BMTS(1), {from: holder2}));  // ..can neither sell
+        await expectThrow(token.burn(BMTS(1), {from: holder1})); // nor burn yet
+        await expectThrow(token.burn(BMTS(1), {from: holder2})); //
+
+        // switching between different icos can only be done by an account with the 'sale' role
+        await expectThrow(token.switchToNextSale(holder1, {from: holder2}));
+        // and when switch is called the role of current account is revoked
+        await token.switchToNextSale(holder1, {from: ico});
+        await expectThrow(token.switchToNextSale(holder2, {from:ico}));
+        // new sale has all the rights now, including switching
+        await token.switchToNextSale(ico, {from: holder1});
 
         // holder3
-        await token.frozenTransfer(holder3, BMTS(10), 1550000000, false, {from: ico});
+        await token.transfer(holder3, BMTS(10), {from: ico});
         assertBigNumberEqual(await token.balanceOf(holder3), BMTS(10));
-        assertBigNumberEqual(await token.availableBalanceOf(holder3), BMTS(0));
         await expectThrow(token.transfer(nobody, BMTS(1), {from: holder3}));
 
-        // ico is over - now transfer is allowed
-        await token.setTime(1560000000);
+        // refund frozen tokens
+        // first attempt - not approved
+        await expectThrow(token.transferFrom(holder3, ico, BMTS(10), {from: ico}));
+        // approve and transferFrom
+        await token.approve(ico, BMTS(10), {from: holder3});
+        await token.transferFrom(holder3, ico, BMTS(10), {from: ico});
+        assertBigNumberEqual(await token.balanceOf(holder3), BMTS(0));
+        // revert back for further testing
+        await token.transfer(holder3, BMTS(10), {from:ico});
+
+        // ico is over - one of the owners decided to unfreeze tokens
+        await token.thaw({from: owner1});
+        // but that's not enough to actually unfreeze them
+        await expectThrow(token.transfer(nobody, BMTS(1), {from: holder1}));
+        // now one more owner unfreezes tokens
+        await token.thaw({from: owner2});
+        // now everyone can use their tokens as usual
         await token.transfer(nobody, BMTS(1), {from: holder1});
         await token.transfer(nobody, BMTS(1), {from: holder2});
-        assertBigNumberEqual(await token.balanceOf(nobody), BMTS(2));
-        assertBigNumberEqual(await token.availableBalanceOf(nobody), BMTS(2));
+        // and burn as well
+        var burntNumber = 1;
+        await token.burn(BMTS(burntNumber), {from: holder2});
 
-        assertBigNumberEqual(await token.balanceOf(holder2), BMTS(39));
-        assertBigNumberEqual(await token.availableBalanceOf(holder2), BMTS(39));
+        assertBigNumberEqual(await token.balanceOf(nobody), BMTS(2));
+        assertBigNumberEqual(await token.balanceOf(holder2), BMTS(39 - burntNumber));
 
         assertBigNumberEqual(await token.balanceOf(holder1), BMTS(19));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(19));
 
         // refund
         // first attempt - not approved
-        await expectThrow(token.frozenTransferFrom(holder3, ico, BMTS(10), 1550000000, false, {from: ico}));
+        await expectThrow(token.transferFrom(holder3, ico, BMTS(10), {from: ico}));
 
         await token.approve(ico, BMTS(10), {from: holder3});
-        await token.frozenTransferFrom(holder3, ico, BMTS(10), 1550000000, false, {from: ico});
+        await token.transferFrom(holder3, ico, BMTS(10), {from: ico});
         assertBigNumberEqual(await token.balanceOf(holder3), BMTS(0));
-        assertBigNumberEqual(await token.availableBalanceOf(holder3), BMTS(0));
         await expectThrow(token.transfer(nobody, BMTS(1), {from: holder3}));
 
-        // no more privileged frozen* calls
+        // no more privileged calls, one signature
         await token.disablePrivileged({from: owner1});
+
+        // owner still can call setSale
+        await token.setSale(holder2, true, {from: owner1});
+
+        // remaining signature
         await token.disablePrivileged({from: owner2});  // 2nd signature
 
-        // and owners no longer have any power over the token contract
-        await expectThrow(token.frozenTransfer(holder2, BMTS(40), 1590000000, false, {from: owner1}));
-        await expectThrow(token.frozenTransfer(holder1, BMTS(20), 1590000000, false, {from: ico}));
+        // owner cannot setSale anymore
+        await expectThrow(token.setSale(holder2, true, {from: owner2}));
 
         // totals
-        assertBigNumberEqual(await token.totalSupply(), BMTS(totalSupply));
+        assertBigNumberEqual(await token.totalSupply(), BMTS(totalSupply - burntNumber));
         let sum = new web3.BigNumber(0);
         for (const role of [owner1, owner2, holder1, holder2, holder3, ico, nobody])
-            sum = sum.add(await token.availableBalanceOf(role));
-        assertBigNumberEqual(sum, BMTS(totalSupply));
-    });
-
-    it('test token freezing', async function() {
-        const owner1 = accounts[0];
-        const holder1 = accounts[1];
-        const holder2 = accounts[2];
-        const holder3 = accounts[3];
-
-        const token = await BoomstarterTokenTestHelper.new([owner1], 1, {from: owner1});
-        await token.setSale(owner1, true, {from: owner1});
-        await token.setTime(1600000001);
-        await token.approve(owner1, BMTS(1e6), {from: holder1});
-        // holder1 <- 5 (thaw = 1600000005, KYC = false)
-        await token.frozenTransfer(holder1, BMTS(5), 1600000005, false, {from: owner1});
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(5));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(0));
-
-        // holder1 <- 7 (thaw = 1600000005, KYC = false)
-        await token.frozenTransfer(holder1, BMTS(7), 1600000005, false, {from: owner1});
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(12));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(0));
-
-        await expectThrow(token.transfer(holder2, BMTS(1), {from: holder1}));
-
-        await withRollback(async () => {
-            // no such tokens
-            await expectThrow(token.frozenTransferFrom(holder1, owner1, BMTS(1), 1700000000, false, {from: owner1}));
-
-            // not enough tokens which are (thaw = 1600000005, KYC = false)
-            await expectThrow(token.frozenTransferFrom(holder1, owner1, BMTS(13), 1600000005, false, {from: owner1}));
-
-            // not a sale
-            await expectThrow(token.frozenTransferFrom(holder1, holder3, BMTS(1), 1600000005, false, {from: owner1}));
-            await expectThrow(token.frozenTransferFrom(holder1, owner1, BMTS(1), 1600000005, false, {from: holder1}));
-            await expectThrow(token.frozenTransferFrom(holder1, holder3, BMTS(1), 1600000005, false, {from: holder1}));
-
-            await expectThrow(token.frozenTransfer(holder3, BMTS(1), 1600000005, false, {from: holder1}));
-            await expectThrow(token.frozenTransfer(holder3, BMTS(1), 1600000005, false, {from: holder1}));
-            await expectThrow(token.frozenTransfer(holder3, BMTS(1), 1600000010, false, {from: holder1}));
-            await expectThrow(token.frozenTransfer(holder3, BMTS(1), 1600000010, false, {from: holder1}));
-
-            // there are enough tokens which are (thaw = 1600000005, KYC = false)
-            await token.frozenTransferFrom(holder1, owner1, BMTS(6), 1600000005, false, {from: owner1});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(6));
-            assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(0));
-        });
-
-
-        await token.setTime(1600000002);
-
-        // holder1 <- 1 (thaw = 1600000005, KYC = false)
-        await token.frozenTransfer(holder1, BMTS(1), 1600000005, false, {from: owner1});
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(13));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(0));
-
-        // holder1 <- 2 (thaw = 1600000005, KYC = false)
-        await token.frozenTransfer(holder1, BMTS(2), 1600000005, false, {from: owner1});
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(15));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(0));
-
-        // checking various frozen transferFrom calls
-        await withRollback(async () => {
-            await token.frozenTransferFrom(holder1, owner1, BMTS(6), 1600000005, false, {from: owner1});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(9));
-        });
-
-        await withRollback(async () => {
-            await token.frozenTransferFrom(holder1, owner1, BMTS(2), 1600000005, false, {from: owner1});
-            await token.frozenTransferFrom(holder1, owner1, BMTS(4), 1600000005, false, {from: owner1});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(9));
-        });
-
-        await withRollback(async () => {
-            await token.frozenTransferFrom(holder1, owner1, BMTS(9), 1600000005, false, {from: owner1});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(6));
-        });
-
-        await withRollback(async () => {
-            await token.frozenTransferFrom(holder1, owner1, BMTS(3), 1600000005, false, {from: owner1});
-            await token.frozenTransferFrom(holder1, owner1, BMTS(6), 1600000005, false, {from: owner1});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(6));
-        });
-
-        await expectThrow(token.transfer(holder2, BMTS(1), {from: holder1}));
-        // all tokens are unfrozen
-        await token.setTime(1600000006);
-
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(15));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(15));
-
-        await withRollback(async () => {
-            await expectThrow(token.transfer(holder2, BMTS(100), {from: holder1}));
-
-            // entire cell could be transferred
-            await token.transfer(holder2, BMTS(6), {from: holder1});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(9));
-            assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(9));
-
-            assertBigNumberEqual(await token.balanceOf(holder2), BMTS(6));
-            assertBigNumberEqual(await token.availableBalanceOf(holder2), BMTS(6));
-        });
-
-        await withRollback(async () => {
-            // transfer of thaw + regular tokens
-            await token.transfer(holder1, BMTS(10), {from: owner1});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(25));
-            assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(25));
-
-            await expectThrow(token.transfer(holder2, BMTS(100), {from: holder1}));
-
-            await token.transfer(holder2, BMTS(13), {from: holder1});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(12));
-            assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(12));
-
-            assertBigNumberEqual(await token.balanceOf(holder2), BMTS(13));
-            assertBigNumberEqual(await token.availableBalanceOf(holder2), BMTS(13));
-        });
-
-        await withRollback(async () => {
-            // transfer of regular tokens (not touching frozen tokens)
-            await token.transfer(holder1, BMTS(10), {from: owner1});
-
-            await token.transfer(holder2, BMTS(2), {from: holder1});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(23));
-            assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(23));
-
-            assertBigNumberEqual(await token.balanceOf(holder2), BMTS(2));
-            assertBigNumberEqual(await token.availableBalanceOf(holder2), BMTS(2));
-        });
-
-        //console.log("CHECK");
-        await withRollback(async () => {
-            // multiple transfers
-            await token.transfer(holder2, BMTS(2), {from: holder1});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(13));
-            assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(13));
-
-            assertBigNumberEqual(await token.balanceOf(holder2), BMTS(2));
-            assertBigNumberEqual(await token.availableBalanceOf(holder2), BMTS(2));
-
-            await expectThrow(token.transfer(holder2, BMTS(5), {from: holder1}));
-            await token.transfer(holder2, BMTS(4), {from: holder1});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(9));
-            assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(9));
-
-            assertBigNumberEqual(await token.balanceOf(holder2), BMTS(6));
-            assertBigNumberEqual(await token.availableBalanceOf(holder2), BMTS(6));
-        });
-
-        await expectThrow(token.transfer(holder2, BMTS(100), {from: holder1}));
-
-        // transferFrom
-        await token.approve(holder3, BMTS(1e6), {from: holder1});
-
-        await withRollback(async () => {
-            await expectThrow(token.transferFrom(holder1, holder2, BMTS(100), {from: holder3}));
-
-            // entire cell could be transferred
-            await token.transferFrom(holder1, holder2, BMTS(6), {from: holder3});
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(9));
-            assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(9));
-
-            assertBigNumberEqual(await token.balanceOf(holder2), BMTS(6));
-            assertBigNumberEqual(await token.availableBalanceOf(holder2), BMTS(6));
-        });
-
-        await token.transferFrom(holder1, holder2, BMTS(2), {from: holder3});
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(13));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(13));
-
-        assertBigNumberEqual(await token.balanceOf(holder2), BMTS(2));
-        assertBigNumberEqual(await token.availableBalanceOf(holder2), BMTS(2));
-
-        await expectThrow(token.transferFrom(holder1, holder2, BMTS(5), {from: holder3}));
-        await token.transferFrom(holder1, holder2, BMTS(2), {from: holder3});
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(11));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(11));
-
-        assertBigNumberEqual(await token.balanceOf(holder2), BMTS(4));
-        assertBigNumberEqual(await token.availableBalanceOf(holder2), BMTS(4));
-
-        // further unfreezing
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(11));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(11));
-        await expectThrow(token.transfer(holder3, BMTS(100), {from: holder1}));
-
-        await withRollback(async () => {
-            // single transfer
-            await token.transfer(holder3, BMTS(11), {from: holder1});
-
-            assertBigNumberEqual(await token.balanceOf(holder1), BMTS(0));
-            assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(0));
-
-            assertBigNumberEqual(await token.balanceOf(holder3), BMTS(11));
-            assertBigNumberEqual(await token.availableBalanceOf(holder3), BMTS(11));
-        });
-
-        // multiple transfers
-        await expectThrow(token.transfer(holder3, BMTS(12), {from: holder1}));
-        await token.transfer(holder3, BMTS(9), {from: holder1});
-
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(2));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(2));
-
-        assertBigNumberEqual(await token.balanceOf(holder3), BMTS(9));
-        assertBigNumberEqual(await token.availableBalanceOf(holder3), BMTS(9));
-
-        await expectThrow(token.transfer(holder3, BMTS(3), {from: holder1}));
-        await token.transfer(holder3, BMTS(2), {from: holder1});
-
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(0));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(0));
-
-        assertBigNumberEqual(await token.balanceOf(holder3), BMTS(11));
-        assertBigNumberEqual(await token.availableBalanceOf(holder3), BMTS(11));
-    });
-
-    it('test viewing frozen cells', async function() {
-        const assertCellContent = (cell, amount, ts, isKYC) => {
-            assertBigNumberEqual(cell[0], amount);
-            assertBigNumberEqual(cell[1], ts);
-            assert.equal(cell[2], isKYC);
-        };
-
-        const owner1 = accounts[0];
-        const holder1 = accounts[1];
-
-        const token = await BoomstarterTokenTestHelper.new([owner1], 1, {from: owner1});
-        await token.setSale(owner1, true, {from: owner1});
-        await token.setTime(1600000001);
-
-        // holder1 <- 5 (thaw = 1600000005, KYC = false)
-        assertBigNumberEqual(await token.frozenCellCount(holder1), 0);
-
-        await token.frozenTransfer(holder1, BMTS(5), 1600000005, false, {from: owner1});
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(5));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(0));
-
-        assertBigNumberEqual(await token.frozenCellCount(holder1), 1);
-        assertCellContent(await token.frozenCell(holder1, 0), BMTS(5), 1600000005, false);
-
-        await token.setTime(1600000002);
-
-        // holder1 <- 1 (thaw = 1600000005, KYC = false)
-        await token.frozenTransfer(holder1, BMTS(1), 1600000006, false, {from: owner1});
-        assertBigNumberEqual(await token.balanceOf(holder1), BMTS(6));
-        assertBigNumberEqual(await token.availableBalanceOf(holder1), BMTS(0));
-
-        assertBigNumberEqual(await token.frozenCellCount(holder1), 2);
-        assertCellContent(await token.frozenCell(holder1, 0), BMTS(5), 1600000005, false);
-        assertCellContent(await token.frozenCell(holder1, 1), BMTS(1), 1600000006, false);
+            sum = sum.add(await token.balanceOf(role));
+        assertBigNumberEqual(sum, BMTS(totalSupply - burntNumber));
     });
 });

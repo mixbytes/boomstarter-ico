@@ -14,8 +14,8 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
 
     /// @dev checks that owners didn't finish the sale yet
     modifier onlyIfSaleIsActive() {
-      require(m_active == true);
-      _;
+        require(m_active == true);
+        _;
     }
 
     /**
@@ -24,9 +24,9 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
      *       AND also that the limits for the sale are not met
      */
     modifier checkLimitsAndDates() {
-      require((c_dateTo >= getTime()) &&
-              (m_currentTokensSold < c_maximumTokensSold));
-      _;
+        require((c_dateTo >= getTime()) &&
+                (m_currentTokensSold < c_maximumTokensSold));
+        _;
     }
 
     /**
@@ -70,7 +70,7 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
     {
         address investor = msg.sender;
         uint256 payment = msg.value;
-        require((payment.mul(getETHPriceInCents())).div(1 ether) >= getMinInvestmentInCents());
+        require((payment.mul(m_ETHPriceInCents)).div(1 ether) >= c_MinInvestmentInCents);
 
         /**
          * calculate amount based on ETH/USD rate
@@ -83,13 +83,13 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         // price of the batch of token bought
         uint centsPerToken;
         if (m_currentTokensSold < c_priceRiseTokenAmount) {
-          centsPerToken = c_centsPerTokenFirst;
-          // don't let price rise happen during this transaction - cap at price change value
-          cap = c_priceRiseTokenAmount;
+            centsPerToken = c_centsPerTokenFirst;
+            // don't let price rise happen during this transaction - cap at price change value
+            cap = c_priceRiseTokenAmount;
         } else {
-          centsPerToken = c_centsPerTokenSecond;
-          // capped by the presale cap itself
-          cap = c_maximumTokensSold;
+            centsPerToken = c_centsPerTokenSecond;
+            // capped by the presale cap itself
+            cap = c_maximumTokensSold;
         }
 
         // amount that can be bought depending on the price
@@ -100,12 +100,12 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
 
         // if amount of tokens we can buy is more than the amount available
         if (tokenAmount > maxTokensAllowed) {
-          // price of 1 full token in ether-wei
-          // example 30 * 1e18 / 36900 = 0.081 * 1e18 = 0.081 eth
-          uint ethPerToken = centsPerToken.mul(1 ether).div(m_ETHPriceInCents);
-          // change amount to maximum allowed
-          tokenAmount = maxTokensAllowed;
-          payment = ethPerToken.mul(tokenAmount).div(1 ether);
+            // price of 1 full token in ether-wei
+            // example 30 * 1e18 / 36900 = 0.081 * 1e18 = 0.081 eth
+            uint ethPerToken = centsPerToken.mul(1 ether).div(m_ETHPriceInCents);
+            // change amount to maximum allowed
+            tokenAmount = maxTokensAllowed;
+            payment = ethPerToken.mul(tokenAmount).div(1 ether);
         }
 
         m_currentTokensSold = m_currentTokensSold.add(tokenAmount);
@@ -114,7 +114,7 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         m_beneficiary.transfer(payment);
         FundTransfer(investor, payment, true);
 
-        m_token.frozenTransfer(investor, tokenAmount, c_thawTS, false);
+        m_token.transfer(investor, tokenAmount);
 
         uint change;
         change = msg.value.sub(payment);
@@ -133,6 +133,8 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         onlyIfSaleIsActive
         onlymanyowners(keccak256(msg.data))
     {
+        // next sale should be set using setNextSale
+        require( m_nextSale != address(0) );
         // cannot accept ether anymore
         m_active = false;
         // send remaining oraclize ether to the next sale - we don't need oraclize anymore
@@ -141,6 +143,18 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         m_token.transfer(m_nextSale, m_token.balanceOf(this));
         // mark next sale as a valid sale account, unmark self as valid sale account
         m_token.switchToNextSale(m_nextSale);
+    }
+
+    /**
+     * @notice set address of a sale that will be next one after the current sale is finished
+     * @param _sale address of the sale contract
+     */
+    function setNextSale(address _sale)
+        external
+        validAddress(_sale)
+        onlymanyowners(keccak256(msg.data))
+    {
+        m_nextSale = _sale;
     }
 
     /**
@@ -154,16 +168,6 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
     }
 
 
-    /// @dev to be overriden in tests
-    function getMinInvestmentInCents() view public returns (uint) {
-        return c_MinInvestmentInCents;
-    }
-
-    /// @dev to be overriden in tests
-    function getETHPriceInCents() view public returns (uint) {
-        return m_ETHPriceInCents;
-    }
-
     // FIELDS
 
     /// @notice usd price of BoomstarterToken in cents
@@ -173,7 +177,7 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
     uint public constant c_thawTS = 1538395200; // 01-Oct-18 12:00:00 UTC
 
     /// @notice minimum investment in cents
-    uint public constant c_MinInvestmentInCents = 30000 * 100; // $30k
+    uint public c_MinInvestmentInCents = 30000 * 100; // $30k
 
     /// @dev contract responsible for token accounting
     IBoomstarterToken public m_token;

@@ -20,10 +20,16 @@ contract EthPriceDependent is usingOraclize, multiowned {
         public
         multiowned(_initialOwners, _consensus)
     {
-        oraclize_setProof(proofType_TLSNotary);
-        // Use it when testing with testrpc and etherium bridge. Don't forget to change address
-        OAR = OraclizeAddrResolverI(0x6f485C8BF6fc43eA212E93BBF8ce046C7f1cb475);
-        updateETHPriceInCents();
+        m_ETHPriceUpdateRunning = false;
+        bool bridge = true; // should be false in production
+        oraclize_setProof(proofType_TLSNotary | proofStorage_IPFS);
+        if (bridge) {
+          // Use it when testing with testrpc and etherium bridge. Don't forget to change address
+          OAR = OraclizeAddrResolverI(0x6f485C8BF6fc43eA212E93BBF8ce046C7f1cb475);
+        } else {
+          // Don't call this while testing as it's too long and gets in the way
+          updateETHPriceInCents();
+        }
     }
 
     /// @notice Send oraclize query.
@@ -32,6 +38,9 @@ contract EthPriceDependent is usingOraclize, multiowned {
     /// updating will require running this function again.
     /// if price is out of bounds - updating stops
     function updateETHPriceInCents() public payable {
+        // prohibit running multiple instances of update
+        require(m_ETHPriceUpdateRunning = false ||
+                (getTime() > m_ETHPriceLastUpdate + 2 * m_ETHPriceUpdateInterval));
         if (oraclize_getPrice("URL") > this.balance) {
             NewOraclizeQuery("Oraclize request fail. Not enough ether");
         } else {
@@ -41,6 +50,7 @@ contract EthPriceDependent is usingOraclize, multiowned {
                 "URL",
                 "json(https://api.coinmarketcap.com/v1/ticker/ethereum/?convert=USD).0.price_usd"
             );
+            m_ETHPriceUpdateRunning = true;
         }
     }
 
@@ -57,6 +67,7 @@ contract EthPriceDependent is usingOraclize, multiowned {
             updateETHPriceInCents();
         } else {
             ETHPriceOutOfBounds(newPrice);
+            m_ETHPriceUpdateRunning = false;
         }
     }
 
@@ -107,5 +118,8 @@ contract EthPriceDependent is usingOraclize, multiowned {
     uint public m_ETHPriceUpperBound = 100000000;
 
     /// @dev Update ETH price in cents every hour
-    uint public constant m_ETHPriceUpdateInterval = 60*60;
+    uint public m_ETHPriceUpdateInterval = 60*60;
+
+    /// @dev status of the price update
+    bool public m_ETHPriceUpdateRunning;
 }

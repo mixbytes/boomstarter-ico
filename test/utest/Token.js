@@ -79,7 +79,6 @@ export function tokenUTest(accounts, instantiate, settings) {
 
         assertBigNumberEqual(await token.totalSupply({from: role.nobody}), TOK(22));
         assertBigNumberEqual(await token.balanceOf(role.holder1, {from: role.nobody}), TOK(10));
-
         if (settings.startCirculationFn)
             await settings.startCirculationFn(role, token);
 

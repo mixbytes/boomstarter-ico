@@ -24,18 +24,16 @@ module.exports = function(deployer, network) {
   deployer.then( function() {
     return BoomstarterToken.deployed()
   }).then( function(token){
-    // deploy presale and mark it inside the token as trusted sale account
     return deployer.deploy(BoomstarterPresale, _owners, token.address, 
                            beneficiary).then( function(){
       boomstarterToken = token;
       boomstarterPresaleAddress = BoomstarterPresale.address;
-      var promises = _owners.map( function( account ) {
-        return boomstarterToken.setSale(BoomstarterPresale.address, true, {from: account});
-      });
-      return Promise.all(promises);
     });
   }).then( function() {
     // send all tokens to the presale contract
     return boomstarterToken.transfer( boomstarterPresaleAddress, 36000000*web3.toWei(1,"ether") );
+  }).then( function() {
+    // mark boomstarterPresale as a trusted sale account and revoke deployer's rights
+    return boomstarterToken.switchToNextSale( boomstarterPresaleAddress );
   });
 };

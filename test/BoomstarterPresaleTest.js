@@ -12,6 +12,7 @@ var boomstarterTokenTestHelper;
 var owners;
 var beneficiary;
 var buyers;
+var nextIco;
 
 const totalSupply = 36e24; //36m tokens
 
@@ -21,11 +22,11 @@ contract('BoomstarterPresale', async function(accounts) {
         owners = [ accounts[0], accounts[1], accounts[2] ];
         buyers = [ accounts[4], accounts[5], accounts[6] ];
         beneficiary = accounts[3];
+        nextIco = accounts[7];
         boomstarterTokenTestHelper = await BoomstarterTokenTestHelper.new(owners, 2);
         boomstarterPresaleTestHelper = await BoomstarterPresaleTestHelper.new(owners, boomstarterTokenTestHelper.address, beneficiary);
-        await boomstarterTokenTestHelper.setSale( boomstarterPresaleTestHelper.address, true, {from: owners[0]} );
-        await boomstarterTokenTestHelper.setSale( boomstarterPresaleTestHelper.address, true, {from: owners[1]} );
         await boomstarterTokenTestHelper.transfer( boomstarterPresaleTestHelper.address, totalSupply, {from: owners[0]});
+        await boomstarterTokenTestHelper.switchToNextSale( boomstarterPresaleTestHelper.address, {from: owners[0]} );
         await boomstarterTokenTestHelper.setTime( 1520000000 );
         await boomstarterPresaleTestHelper.setTime( 1520000000 );
         // set eth price to $300
@@ -62,6 +63,16 @@ contract('BoomstarterPresale', async function(accounts) {
         assertBigNumberEqual(new web3.BigNumber(difference),
                              new web3.BigNumber(expectedDifference));
     });
+    it("check that investing after dateTo doesn't work", async function() {
+        await boomstarterPresaleTestHelper.setTime( 1530000000 );
+        await expectThrow(boomstarterPresaleTestHelper.buy({from: buyers[0], value: web3.toWei(7, "ether")}));
+        // return back to normal time
+        await boomstarterPresaleTestHelper.setTime( 1520000000 );
+    });
+    it("check that investing less than the minimum doesn't work", async function() {
+        var notEnoughEther = web3.toWei(0.0001, "ether");
+        await expectThrow(boomstarterPresaleTestHelper.buy({from: buyers[0], value: notEnoughEther}));
+    });
     it("check buying more than the limit allows", async function() {
         // set eth price to $200
         await boomstarterPresaleTestHelper.setETHPriceManually( 20000, {from: owners[0]} );
@@ -84,5 +95,102 @@ contract('BoomstarterPresale', async function(accounts) {
         expectedDifference = 8000e18 * 0.4 / 200;
         assertBigNumberEqual(new web3.BigNumber(difference),
                              new web3.BigNumber(expectedDifference));
+    });
+    it("check price update", async function() {
+        // running new update request with smaller update interval
+        await boomstarterPresaleTestHelper.updateETHPriceInCents({value: web3.toWei(1, "ether")});
+
+        console.log("waiting for the price");
+        var manualPrice = 20000;
+        function waitForPriceUpdate( resolve ) {
+            boomstarterPresaleTestHelper.m_ETHPriceInCents().then( function( res ) {
+                process.stdout.write(".");
+                if ( res.toNumber() == manualPrice ) {
+                    setTimeout( function() { waitForPriceUpdate( resolve ); }, 5000 );
+                } else {
+                    process.stdout.write("\n");
+                    resolve( res );
+                }
+            });
+        }
+        await new Promise( function( resolve, reject ) {
+            waitForPriceUpdate( resolve );
+        });
+
+        // cannot run update again as it's already running
+        await expectThrow(boomstarterPresaleTestHelper.updateETHPriceInCents({value: web3.toWei(1, "ether")}));
+
+        //cannot update price manually when it's just updated
+        await boomstarterPresaleTestHelper.setETHPriceManually(10000, {from: owners[0]});
+        await expectThrow(boomstarterPresaleTestHelper.setETHPriceManually(10000, {from: owners[1]}));
+        //set impossible limits so that update stops
+        await boomstarterPresaleTestHelper.setETHPriceUpperBound(10, {from: owners[0]});
+        await boomstarterPresaleTestHelper.setETHPriceUpperBound(10, {from: owners[1]});
+
+        var testnet = false;
+        if (testnet) {
+            //wait enough time and try to set again - double the update time
+            console.log("waiting for price to expire");
+            await new Promise( function( resolve, reject ) {
+                setTimeout( function() { resolve(0); }, 10000 ); 
+            });
+        } else {
+            //skip 15 seconds
+            await boomstarterPresaleTestHelper.setTime( 1520000000 + 15);
+        }
+
+        //now that price has expired update the price to any value
+        await boomstarterPresaleTestHelper.setETHPriceManually(10000, {from: owners[0]});
+        await boomstarterPresaleTestHelper.setETHPriceManually(10000, {from: owners[1]});
+
+        //can run update again as it's stopped
+        await boomstarterPresaleTestHelper.updateETHPriceInCents({value: web3.toWei(1, "ether")});
+
+        //wait some more and set test-friendly price
+        if (testnet) {
+            //wait enough time and try to set again - double the update time
+            console.log("waiting for price to expire");
+            await new Promise( function( resolve, reject ) {
+                setTimeout( function() { resolve(0); }, 10000 ); 
+            });
+        } else {
+            //skip 15 seconds
+            await boomstarterPresaleTestHelper.setTime( 1520000000 + 15 + 15);
+        }
+
+        //now that price has expired update the price to any value
+        await boomstarterPresaleTestHelper.setETHPriceManually(20000, {from: owners[0]});
+        await boomstarterPresaleTestHelper.setETHPriceManually(20000, {from: owners[1]});
+    });
+    it("check finish sale", async function() {
+        // increase the limit. Only possible in test helper
+        await boomstarterPresaleTestHelper.setMaximumTokensSold( 20000e18 );
+        // no next sale has been set, expect error (after multisig)
+        await boomstarterPresaleTestHelper.finishSale({from:owners[0]});
+        await expectThrow(boomstarterPresaleTestHelper.finishSale({from:owners[1]}));
+
+        // set next sale
+        await boomstarterPresaleTestHelper.setNextSale(nextIco, {from:owners[0]});
+        await boomstarterPresaleTestHelper.setNextSale(nextIco, {from:owners[1]});
+
+        // finish shouldn't work from non-owner users
+        await expectThrow(boomstarterPresaleTestHelper.finishSale({from:buyers[0]}));
+        await expectThrow(boomstarterPresaleTestHelper.finishSale({from:buyers[1]}));
+
+        var tokensLeft = await boomstarterTokenTestHelper.balanceOf( boomstarterPresaleTestHelper.address );
+        var etherLeft = await web3.eth.getBalance( boomstarterPresaleTestHelper.address );
+        var etherDefault = await web3.eth.getBalance( nextIco );
+
+        // finish from owners
+        await boomstarterPresaleTestHelper.finishSale({from:owners[0]});
+        await boomstarterPresaleTestHelper.finishSale({from:owners[1]});
+
+        // nothing left in the previous sale contract
+        assertBigNumberEqual( await boomstarterTokenTestHelper.balanceOf( boomstarterPresaleTestHelper.address ), new web3.BigNumber(0) );
+        assertBigNumberEqual( await web3.eth.getBalance( boomstarterPresaleTestHelper.address ), new web3.BigNumber(0) );
+
+        // everything has been transferred to the new sale contract
+        assertBigNumberEqual( await boomstarterTokenTestHelper.balanceOf( nextIco ), tokensLeft );
+        assertBigNumberEqual( await web3.eth.getBalance( nextIco ), new web3.BigNumber(etherDefault.toNumber() + etherLeft.toNumber()) );
     });
 });

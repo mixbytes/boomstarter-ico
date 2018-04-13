@@ -36,15 +36,8 @@ interface IBoomstarterToken {
     function approveAndCall(address _spender, uint256 _value, bytes _extraData) public;
 
     // BoomstarterToken
-    function setKYCProvider(address KYCProvider) external;
     function setSale(address account, bool isSale) external;
     function switchToNextSale(address _newSale) external;
     function disablePrivileged() external;
 
-    function availableBalanceOf(address _owner) public view returns (uint256);
-    function frozenCellCount(address owner) public view returns (uint);
-    function frozenCell(address owner, uint index) public view returns (uint amount, uint thawTS, bool isKYCRequired);
-
-    function frozenTransfer(address _to, uint256 _value, uint thawTS, bool isKYCRequired) external returns (bool);
-    function frozenTransferFrom(address _from, address _to, uint256 _value, uint thawTS, bool isKYCRequired) external returns (bool);
 }
