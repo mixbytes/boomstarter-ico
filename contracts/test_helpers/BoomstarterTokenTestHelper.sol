@@ -11,14 +11,4 @@ contract BoomstarterTokenTestHelper is BoomstarterToken {
         BoomstarterToken(_initialOwners, _signaturesRequired)
     {
     }
-
-    function setTime(uint time) public {
-        m_time = time;
-    }
-
-    function getTime() internal view returns (uint) {
-        return m_time;
-    }
-
-    uint public m_time;
 }

@@ -21,14 +21,14 @@ contract EthPriceDependent is usingOraclize, multiowned {
         multiowned(_initialOwners, _consensus)
     {
         m_ETHPriceUpdateRunning = false;
-        bool bridge = true; // should be false in production
+        bool bridge = false; // should be false in production
         oraclize_setProof(proofType_TLSNotary | proofStorage_IPFS);
         if (bridge) {
-          // Use it when testing with testrpc and etherium bridge. Don't forget to change address
-          OAR = OraclizeAddrResolverI(0x6f485C8BF6fc43eA212E93BBF8ce046C7f1cb475);
+            // Use it when testing with testrpc and etherium bridge. Don't forget to change address
+            OAR = OraclizeAddrResolverI(0x6f485C8BF6fc43eA212E93BBF8ce046C7f1cb475);
         } else {
-          // Don't call this while testing as it's too long and gets in the way
-          updateETHPriceInCents();
+            // Don't call this while testing as it's too long and gets in the way
+            updateETHPriceInCents();
         }
     }
 
@@ -39,18 +39,17 @@ contract EthPriceDependent is usingOraclize, multiowned {
     /// if price is out of bounds - updating stops
     function updateETHPriceInCents() public payable {
         // prohibit running multiple instances of update
-        require(m_ETHPriceUpdateRunning = false ||
-                (getTime() > m_ETHPriceLastUpdate + 2 * m_ETHPriceUpdateInterval));
+        require((m_ETHPriceUpdateRunning == false) || (priceExpired()));
         if (oraclize_getPrice("URL") > this.balance) {
             NewOraclizeQuery("Oraclize request fail. Not enough ether");
         } else {
-            NewOraclizeQuery("Oraclize query was sent");
             oraclize_query(
                 m_ETHPriceUpdateInterval,
                 "URL",
                 "json(https://api.coinmarketcap.com/v1/ticker/ethereum/?convert=USD).0.price_usd"
             );
             m_ETHPriceUpdateRunning = true;
+            NewOraclizeQuery("Oraclize query was sent");
         }
     }
 
@@ -60,14 +59,14 @@ contract EthPriceDependent is usingOraclize, multiowned {
 
         uint newPrice = parseInt(result).mul(100);
 
-        if (newPrice > m_ETHPriceLowerBound && newPrice < m_ETHPriceUpperBound) {
+        m_ETHPriceUpdateRunning = false;
+        if (newPrice >= m_ETHPriceLowerBound && newPrice <= m_ETHPriceUpperBound) {
             m_ETHPriceInCents = newPrice;
             m_ETHPriceLastUpdate = getTime();
             NewETHPrice(m_ETHPriceInCents);
             updateETHPriceInCents();
         } else {
             ETHPriceOutOfBounds(newPrice);
-            m_ETHPriceUpdateRunning = false;
         }
     }
 
@@ -96,8 +95,19 @@ contract EthPriceDependent is usingOraclize, multiowned {
         external
         onlymanyowners(keccak256(msg.data))
     {
-        require(getTime() > m_ETHPriceLastUpdate + 2 * m_ETHPriceUpdateInterval);
+        require( priceExpired() );
         m_ETHPriceInCents = _price;
+        NewETHPrice(m_ETHPriceInCents);
+    }
+
+    /// @notice add more ether to use in oraclize queries
+    function topUp() external payable {
+    }
+
+    /// @dev Check that double the update interval has passed
+    ///      since last successful price update
+    function priceExpired() internal view returns (bool) {
+        return (getTime() > m_ETHPriceLastUpdate + 2 * m_ETHPriceUpdateInterval);
     }
 
     /// @dev to be overriden in tests

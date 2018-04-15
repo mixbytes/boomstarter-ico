@@ -22,10 +22,12 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
      *  @dev checks that finish date is not reached yet
      *       (and potentially start date, but not needed for presale)
      *       AND also that the limits for the sale are not met
+     *       AND that current price is non-zero (updated)
      */
     modifier checkLimitsAndDates() {
         require((c_dateTo >= getTime()) &&
-                (m_currentTokensSold < c_maximumTokensSold));
+                (m_currentTokensSold < c_maximumTokensSold) &&
+                (m_ETHPriceInCents > 0));
         _;
     }
 
@@ -112,7 +114,6 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
 
         // send ether to external wallet
         m_beneficiary.transfer(payment);
-        FundTransfer(investor, payment, true);
 
         m_token.transfer(investor, tokenAmount);
 
@@ -120,6 +121,8 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         change = msg.value.sub(payment);
         if (change > 0)
             investor.transfer(change);
+
+        FundTransfer(investor, payment, true);
     }
 
 
@@ -157,24 +160,8 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         m_nextSale = _sale;
     }
 
-    /**
-     * @notice Tests ownership of the current caller.
-     * @return true if it's an owner
-     * It's advisable to call it by new owner to make sure that the same erroneous address is not copy-pasted to
-     * addOwner/changeOwner and to isOwner.
-     */
-    function amIOwner() external constant onlyowner returns (bool) {
-        return true;
-    }
-
 
     // FIELDS
-
-    /// @notice usd price of BoomstarterToken in cents
-    uint public constant c_CentsPerToken = 30;
-
-    /// @dev unix timestamp at which all sold tokens should be unfrozen and available
-    uint public constant c_thawTS = 1538395200; // 01-Oct-18 12:00:00 UTC
 
     /// @notice minimum investment in cents
     uint public c_MinInvestmentInCents = 30000 * 100; // $30k
@@ -199,13 +186,13 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
 
     /// @dev current amount of tokens sold
     uint public m_currentTokensSold = 0;
-    /// @dev limit of tokens to be sold during presale (using ether because decimal is the same)
-    uint public c_maximumTokensSold = 15000000 * 10**18; // 15 million tokens
+    /// @dev limit of tokens to be sold during presale
+    uint public c_maximumTokensSold = uint(1500000) * uint(10) ** uint(18); // 1.5 million tokens
 
     /// @notice first step, usd price of BoomstarterToken in cents 
     uint public c_centsPerTokenFirst = 30; // $0.3
     /// @notice second step, usd price of BoomstarterToken in cents
     uint public c_centsPerTokenSecond = 40; // $0.4
     /// @notice amount of tokens sold at which price switch should happen
-    uint public c_priceRiseTokenAmount = 666668 * 10**18;
+    uint public c_priceRiseTokenAmount = uint(666668) * uint(10) ** uint(18);
 }

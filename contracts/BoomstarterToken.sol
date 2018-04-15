@@ -163,6 +163,8 @@ contract BoomstarterToken is ArgumentsChecker, multiowned, BurnableToken, Standa
         privilegedAllowed
         onlymanyowners(keccak256(msg.data))
     {
+        // shouldn't be frozen otherwise will be impossible to unfreeze
+        require( false == m_frozen );
         m_allowPrivileged = false;
     }
 
@@ -171,11 +173,6 @@ contract BoomstarterToken is ArgumentsChecker, multiowned, BurnableToken, Standa
 
     function isSale(address account) private view returns (bool) {
         return m_sales[account];
-    }
-
-    /// @dev to be overridden in tests
-    function getTime() internal view returns (uint) {
-        return now;
     }
 
 

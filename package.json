@@ -22,7 +22,10 @@
     "babel-preset-stage-2": "^6.24.1",
     "babel-preset-stage-3": "^6.24.1",
     "babel-register": "^6.26.0",
+    "ganache-cli": "^6.1.0",
     "mixbytes-solidity": "^0.1.8",
+    "truffle": "^4.1.5",
+    "truffle-hdwallet-provider": "0.0.3",
     "zeppelin-solidity": "1.2.0"
   }
 }

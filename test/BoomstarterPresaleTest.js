@@ -27,7 +27,6 @@ contract('BoomstarterPresale', async function(accounts) {
         boomstarterPresaleTestHelper = await BoomstarterPresaleTestHelper.new(owners, boomstarterTokenTestHelper.address, beneficiary);
         await boomstarterTokenTestHelper.transfer( boomstarterPresaleTestHelper.address, totalSupply, {from: owners[0]});
         await boomstarterTokenTestHelper.switchToNextSale( boomstarterPresaleTestHelper.address, {from: owners[0]} );
-        await boomstarterTokenTestHelper.setTime( 1520000000 );
         await boomstarterPresaleTestHelper.setTime( 1520000000 );
         // set eth price to $300
         await boomstarterPresaleTestHelper.setETHPriceManually( 30000, {from: owners[0]} );
@@ -100,19 +99,21 @@ contract('BoomstarterPresale', async function(accounts) {
         // running new update request with smaller update interval
         await boomstarterPresaleTestHelper.updateETHPriceInCents({value: web3.toWei(1, "ether")});
 
+        var testUpdateStep = 5; //seconds
         console.log("waiting for the price");
         var manualPrice = 20000;
         function waitForPriceUpdate( resolve ) {
             boomstarterPresaleTestHelper.m_ETHPriceInCents().then( function( res ) {
                 process.stdout.write(".");
                 if ( res.toNumber() == manualPrice ) {
-                    setTimeout( function() { waitForPriceUpdate( resolve ); }, 5000 );
+                    setTimeout( function() { waitForPriceUpdate( resolve ); }, testUpdateStep * 1000 );
                 } else {
                     process.stdout.write("\n");
                     resolve( res );
                 }
             });
         }
+
         await new Promise( function( resolve, reject ) {
             waitForPriceUpdate( resolve );
         });
@@ -132,11 +133,11 @@ contract('BoomstarterPresale', async function(accounts) {
             //wait enough time and try to set again - double the update time
             console.log("waiting for price to expire");
             await new Promise( function( resolve, reject ) {
-                setTimeout( function() { resolve(0); }, 10000 ); 
+                setTimeout( function() { resolve(0); }, testUpdateStep*2*1000 ); 
             });
         } else {
-            //skip 15 seconds
-            await boomstarterPresaleTestHelper.setTime( 1520000000 + 15);
+            //skip double the update seconds + one additional 
+            await boomstarterPresaleTestHelper.setTime( 1520000000 + testUpdateStep*3);
         }
 
         //now that price has expired update the price to any value
@@ -151,11 +152,11 @@ contract('BoomstarterPresale', async function(accounts) {
             //wait enough time and try to set again - double the update time
             console.log("waiting for price to expire");
             await new Promise( function( resolve, reject ) {
-                setTimeout( function() { resolve(0); }, 10000 ); 
+                setTimeout( function() { resolve(0); }, testUpdateStep*2*1000 ); 
             });
         } else {
-            //skip 15 seconds
-            await boomstarterPresaleTestHelper.setTime( 1520000000 + 15 + 15);
+            //skip one more double of update step + one additional step
+            await boomstarterPresaleTestHelper.setTime( 1520000000 + testUpdateStep*6);
         }
 
         //now that price has expired update the price to any value

@@ -38,6 +38,7 @@ interface IBoomstarterToken {
     // BoomstarterToken
     function setSale(address account, bool isSale) external;
     function switchToNextSale(address _newSale) external;
+    function thaw() external;
     function disablePrivileged() external;
 
 }
