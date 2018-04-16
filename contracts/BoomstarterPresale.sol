@@ -141,7 +141,8 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         // cannot accept ether anymore
         m_active = false;
         // send remaining oraclize ether to the next sale - we don't need oraclize anymore
-        m_nextSale.transfer(this.balance);
+        EthPriceDependent next = EthPriceDependent(m_nextSale);
+        next.topUp.value(this.balance)();
         // transfer all remaining tokens to the next sale account
         m_token.transfer(m_nextSale, m_token.balanceOf(this));
         // mark next sale as a valid sale account, unmark self as valid sale account
