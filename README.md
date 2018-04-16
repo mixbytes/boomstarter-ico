@@ -52,7 +52,25 @@ To deploy (as example to infura ropsten) run:
 Look into "truffle.js" for different networks
 
 ## Usage
+### Presale Summary
 
+1. During deploy, BoomstarterPresale automatically launches **updateEthPriceInCents()** and the first one is free. But keep in mind that first, the update will be completed after 1 hour, and second, when it's completed it's going to call delayed update once more. For this call to succeed you need to have your contract to have some ether for oraclize transactions. You can add ether by calling **topUp()** and specifying the amount of ether to send.
+2. If you provide ether before the first update, the update process will continue without any additional input from your part. If you don't - then update is most likely stopped. Reasons for update to stop: not enough ether to pay for an oraclize transaction or the price is out of bounds. To start update again run **updateEthPriceInCents()**, it's payable, so you can provide some oraclize ether without calling **topUp()**. To change price bounds let owners call **setETHPriceUpperBound(uint _price)** / **setETHPriceLowerBound(uint _price)**. If you don't want or cannot start oraclize update, you can let owners call 
+**setETHPriceManually(uint _price)** to set price to any value (it's a backup option and not recommended + cannot be called if automatic update is running)
+3. When price is ready, investors can call **buy()**, tokens will be assigned to the buyer, ether will be transferred to the account specified as `beneficiary` during deploy. The amount of tokens will be calculated from the token price depending on phase and ether price, retrieved from oraclize or set by owners.
+4. If, at the time of investing, amount of tokens sold turns out more than the amount at which the price should increase (from $0.3 to $0.4 for a token), then the investor will receive only the part of tokens bought at the lower price, remaining ether will be refunded. All following calls to **buy()** will be using the higher price (as all lower-price tokens are sold now)
+5. Same goes if amount of tokens sold is more than the amount provided for presale: remaining ether will be refunded to the investor.
+6. When the sale is finished owners should call **finishSale()** to transfer all remaining tokens and ether to the new sale contract. Note that the new sale contract should be set before calling finish. Do that with **setNextSale(address _sale)** function (multisig required).
+
+### BoomstarterToken Summary
+
+1. Initially all tokens are issued to the deployer. In the deploy script the deployer immediately sends all of them to Presale contract, changes its role to 'sale' and revokes their own 'sale' role. This is required because of the following logic with tokens: everything is frozen initially and the _transfer_ functions family (as well as _burn_) can only be called from trusted contracts (the ones having 'sale' role).
+2. It shouldn't be required to set 'sale' manually as **finishSale()** in Presale takes care of it. However as a backup you can let owners call **setSale(address, bool)** to grant anyone 'sale' role.
+3. When all the sales are finished and you wish to unfreeze all tokens - let owners call **thaw()** and from now on the token will be behaving as a regular ERC20 one.
+4. The last thing that should be called by owners is **disablePrivileged()**. After that owners will have no control over the token.
+
+
+## Functions Reference
 ### BoomstarterPresale contract
 
 **buy()** / **fallback function**
