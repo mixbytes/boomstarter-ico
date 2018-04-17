@@ -16,14 +16,14 @@ contract EthPriceDependent is usingOraclize, multiowned {
     /// @param _initialOwners set owners, which can control bounds and things
     ///        described in the actual sale contract, inherited from this one
     /// @param _consensus Number of votes enough to make a decision
-    function EthPriceDependent(address[] _initialOwners,  uint _consensus)
+    /// @param _production True if on mainnet and testnet
+    function EthPriceDependent(address[] _initialOwners,  uint _consensus, bool _production)
         public
         multiowned(_initialOwners, _consensus)
     {
         m_ETHPriceUpdateRunning = false;
-        bool bridge = false; // should be false in production
         oraclize_setProof(proofType_TLSNotary | proofStorage_IPFS);
-        if (bridge) {
+        if (!_production) {
             // Use it when testing with testrpc and etherium bridge. Don't forget to change address
             OAR = OraclizeAddrResolverI(0x6f485C8BF6fc43eA212E93BBF8ce046C7f1cb475);
         } else {

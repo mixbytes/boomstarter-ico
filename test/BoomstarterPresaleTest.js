@@ -15,6 +15,7 @@ var buyers;
 var nextIco;
 
 const totalSupply = 36e24; //36m tokens
+const production = false;
 
 contract('BoomstarterPresale', async function(accounts) {
   
@@ -22,9 +23,9 @@ contract('BoomstarterPresale', async function(accounts) {
         owners = [ accounts[0], accounts[1], accounts[2] ];
         buyers = [ accounts[4], accounts[5], accounts[6] ];
         beneficiary = accounts[3];
-        nextIco = accounts[7];
         boomstarterTokenTestHelper = await BoomstarterTokenTestHelper.new(owners, 2);
-        boomstarterPresaleTestHelper = await BoomstarterPresaleTestHelper.new(owners, boomstarterTokenTestHelper.address, beneficiary);
+        nextIco = await BoomstarterPresaleTestHelper.new(owners, boomstarterTokenTestHelper.address, beneficiary, production);
+        boomstarterPresaleTestHelper = await BoomstarterPresaleTestHelper.new(owners, boomstarterTokenTestHelper.address, beneficiary, production);
         await boomstarterTokenTestHelper.transfer( boomstarterPresaleTestHelper.address, totalSupply, {from: owners[0]});
         await boomstarterTokenTestHelper.switchToNextSale( boomstarterPresaleTestHelper.address, {from: owners[0]} );
         await boomstarterPresaleTestHelper.setTime( 1520000000 );
@@ -171,8 +172,8 @@ contract('BoomstarterPresale', async function(accounts) {
         await expectThrow(boomstarterPresaleTestHelper.finishSale({from:owners[1]}));
 
         // set next sale
-        await boomstarterPresaleTestHelper.setNextSale(nextIco, {from:owners[0]});
-        await boomstarterPresaleTestHelper.setNextSale(nextIco, {from:owners[1]});
+        await boomstarterPresaleTestHelper.setNextSale(nextIco.address, {from:owners[0]});
+        await boomstarterPresaleTestHelper.setNextSale(nextIco.address, {from:owners[1]});
 
         // finish shouldn't work from non-owner users
         await expectThrow(boomstarterPresaleTestHelper.finishSale({from:buyers[0]}));
@@ -180,7 +181,7 @@ contract('BoomstarterPresale', async function(accounts) {
 
         var tokensLeft = await boomstarterTokenTestHelper.balanceOf( boomstarterPresaleTestHelper.address );
         var etherLeft = await web3.eth.getBalance( boomstarterPresaleTestHelper.address );
-        var etherDefault = await web3.eth.getBalance( nextIco );
+        var etherDefault = await web3.eth.getBalance( nextIco.address );
 
         // finish from owners
         await boomstarterPresaleTestHelper.finishSale({from:owners[0]});
@@ -191,7 +192,7 @@ contract('BoomstarterPresale', async function(accounts) {
         assertBigNumberEqual( await web3.eth.getBalance( boomstarterPresaleTestHelper.address ), new web3.BigNumber(0) );
 
         // everything has been transferred to the new sale contract
-        assertBigNumberEqual( await boomstarterTokenTestHelper.balanceOf( nextIco ), tokensLeft );
-        assertBigNumberEqual( await web3.eth.getBalance( nextIco ), new web3.BigNumber(etherDefault.toNumber() + etherLeft.toNumber()) );
+        assertBigNumberEqual( await boomstarterTokenTestHelper.balanceOf( nextIco.address ), tokensLeft );
+        assertBigNumberEqual( await web3.eth.getBalance( nextIco.address ), new web3.BigNumber(etherDefault.toNumber() + etherLeft.toNumber()) );
     });
 });

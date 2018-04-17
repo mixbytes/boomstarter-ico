@@ -10,11 +10,6 @@ This is a truffle project. Make sure you have all the required modules installed
   
 ## Testing
 
-Check that `bridge` is set to `true` in "contracts/EthPriceDependent.sol" constructor:
-
-```c
-bool bridge = true;
-```
 Check that `production` is set to `false` in all migrations files starting from 2_:
 
 ```javascript
@@ -38,7 +33,6 @@ Wait for the bridge to deploy its contracts, then finally run the tests:
 
 Before running deploy please make sure the following values are correct:
 
-* in "contracts/EthPriceDependent.sol" in the constructor: `bridge` should be `false`
 * in "migrations/" in all files starting from 2_: `production` should be `true`
 * in "migrations/" in all files starting from 2_: `_owners` and `beneficiary` should be replaced with appropriate values
 * if you're going to use infura, then in "infura_conf.js", there should be appropriate `mnemonic` and `token`

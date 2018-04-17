@@ -36,11 +36,13 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
      * @param _owners Addresses to do administrative actions
      * @param _token Address of token being sold in this presale
      * @param _beneficiary Address of the wallet, receiving all the collected ether
+     * @param _production False if you use testrpc, true if mainnet and most testnets
      */
-    function BoomstarterPresale(address[] _owners, address _token, address _beneficiary)
+    function BoomstarterPresale(address[] _owners, address _token,
+                                address _beneficiary, bool _production)
         public
         payable
-        EthPriceDependent(_owners, 2)
+        EthPriceDependent(_owners, 2, _production)
         validAddress(_token)
         validAddress(_beneficiary)
     {
@@ -165,7 +167,7 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
     // FIELDS
 
     /// @notice minimum investment in cents
-    uint public c_MinInvestmentInCents = 30000 * 100; // $30k
+    uint public c_MinInvestmentInCents = 3000000; // $30k
 
     /// @dev contract responsible for token accounting
     IBoomstarterToken public m_token;

@@ -28,7 +28,7 @@ module.exports = {
         return new HDWalletProvider(mnemonic, "https://ropsten.infura.io/" + token)
       },
       network_id: 3,
-      gasPrice: 23000000000,
+      gasPrice: 100e9,
       gas: 4700000
     },
 

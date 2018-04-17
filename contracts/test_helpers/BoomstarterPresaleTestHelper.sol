@@ -6,9 +6,9 @@ import '../BoomstarterPresale.sol';
 contract BoomstarterPresaleTestHelper is BoomstarterPresale {
 
     function BoomstarterPresaleTestHelper(address[] _owners, address _token,
-                                          address _beneficiary)
+                                          address _beneficiary, bool _production)
         public
-        BoomstarterPresale(_owners, _token, _beneficiary)
+        BoomstarterPresale(_owners, _token, _beneficiary, _production)
     {
         m_ETHPriceUpdateInterval = 5; // 5 seconds
         c_MinInvestmentInCents = 1 * 100; // $1
