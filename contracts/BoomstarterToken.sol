@@ -29,11 +29,6 @@ contract BoomstarterToken is ArgumentsChecker, multiowned, BurnableToken, Standa
         _;
     }
 
-    modifier validUnixTS(uint ts) {
-        require(ts >= 1522046326 && ts <= 1800000000);
-        _;
-    }
-
     modifier privilegedAllowed {
         require(m_allowPrivileged);
         _;
@@ -75,7 +70,6 @@ contract BoomstarterToken is ArgumentsChecker, multiowned, BurnableToken, Standa
      */
     function transfer(address _to, uint256 _value)
         public
-        payloadSizeIs(2 * 32)
         saleOrUnfrozen(msg.sender)
         returns (bool)
     {
@@ -93,7 +87,6 @@ contract BoomstarterToken is ArgumentsChecker, multiowned, BurnableToken, Standa
      */
     function transferFrom(address _from, address _to, uint256 _value)
         public
-        payloadSizeIs(3 * 32)
         saleOrUnfrozen(msg.sender)
         returns (bool)
     {
@@ -109,7 +102,6 @@ contract BoomstarterToken is ArgumentsChecker, multiowned, BurnableToken, Standa
      */
     function burn(uint256 _amount)
         public
-        payloadSizeIs(1 * 32)
         saleOrUnfrozen(msg.sender)
         returns (bool)
     {
@@ -144,8 +136,8 @@ contract BoomstarterToken is ArgumentsChecker, multiowned, BurnableToken, Standa
         validAddress(_nextSale)
         onlySale(msg.sender)
     {
-        m_sales[_nextSale] = true;
         m_sales[msg.sender] = false;
+        m_sales[_nextSale] = true;
     }
 
     /// @notice Make transfer of tokens available to everyone

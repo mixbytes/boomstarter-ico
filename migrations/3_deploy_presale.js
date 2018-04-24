@@ -10,7 +10,7 @@ if (production) {
       '0x386f2BD2808E96c8A23f698765dCdbe10D08F201',
       '0xB22D86AAC527A68327ECC99667e98429C2d4E2eb',
   ];
-  beneficiary = '0x3c832c4cb16ffee070334ed59e30e8d149556ef4';
+  beneficiary = '0x821F35b8AC42eaB05d4870E104c84c983B1B84f4';
 } else {
   _owners = [
       web3.eth.accounts[0],
