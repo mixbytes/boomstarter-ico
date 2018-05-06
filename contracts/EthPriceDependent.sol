@@ -1,4 +1,4 @@
-pragma solidity 0.4.19;
+pragma solidity 0.4.23;
 
 import "./oraclize/usingOraclize.sol";
 import "zeppelin-solidity/contracts/math/SafeMath.sol";
@@ -21,7 +21,6 @@ contract EthPriceDependent is usingOraclize, multiowned {
         public
         multiowned(_initialOwners, _consensus)
     {
-        m_ETHPriceUpdateRunning = false;
         oraclize_setProof(proofType_TLSNotary | proofStorage_IPFS);
         if (!_production) {
             // Use it when testing with testrpc and etherium bridge. Don't forget to change address
@@ -36,11 +35,14 @@ contract EthPriceDependent is usingOraclize, multiowned {
     /// if price is received successfully - update scheduled automatically,
     /// if at any point the contract runs out of ether - updating stops and further
     /// updating will require running this function again.
-    /// if price is out of bounds - updating stops
+    /// if price is out of bounds - updating attempts continue
     function updateETHPriceInCents() public payable {
         // prohibit running multiple instances of update
-        require((m_ETHPriceUpdateRunning == false) || (priceExpired()));
-        if (oraclize_getPrice("URL") > this.balance) {
+        // however don't throw any error, because it's called from __callback as well
+        // and we need to let it update the price anyway, otherwise there is an attack possibility
+        if ( !updateRequestExpired() ) {
+            NewOraclizeQuery("Oraclize request fail. Previous one still pending");
+        } else if (oraclize_getPrice("URL") > this.balance) {
             NewOraclizeQuery("Oraclize request fail. Not enough ether");
         } else {
             oraclize_query(
@@ -48,7 +50,7 @@ contract EthPriceDependent is usingOraclize, multiowned {
                 "URL",
                 "json(https://api.coinmarketcap.com/v1/ticker/ethereum/?convert=USD).0.price_usd"
             );
-            m_ETHPriceUpdateRunning = true;
+            m_ETHPriceLastUpdateRequest = getTime();
             NewOraclizeQuery("Oraclize query was sent");
         }
     }
@@ -59,15 +61,15 @@ contract EthPriceDependent is usingOraclize, multiowned {
 
         uint newPrice = parseInt(result).mul(100);
 
-        m_ETHPriceUpdateRunning = false;
         if (newPrice >= m_ETHPriceLowerBound && newPrice <= m_ETHPriceUpperBound) {
             m_ETHPriceInCents = newPrice;
             m_ETHPriceLastUpdate = getTime();
             NewETHPrice(m_ETHPriceInCents);
-            updateETHPriceInCents();
         } else {
             ETHPriceOutOfBounds(newPrice);
         }
+        // continue updating anyway (if current price was out of bounds, the price might recover in the next cycle)
+        updateETHPriceInCents();
     }
 
     /// @notice set the limit of ETH in cents, oraclize data greater than this is not accepted
@@ -95,8 +97,11 @@ contract EthPriceDependent is usingOraclize, multiowned {
         external
         onlymanyowners(keccak256(msg.data))
     {
-        require( priceExpired() );
+        // allow for owners to change the price anytime if update is not running
+        // but if it is, then only in case the price has expired
+        require( priceExpired() || updateRequestExpired() );
         m_ETHPriceInCents = _price;
+        m_ETHPriceLastUpdate = getTime();
         NewETHPrice(m_ETHPriceInCents);
     }
 
@@ -110,7 +115,14 @@ contract EthPriceDependent is usingOraclize, multiowned {
         return (getTime() > m_ETHPriceLastUpdate + 2 * m_ETHPriceUpdateInterval);
     }
 
-    /// @dev to be overriden in tests
+    /// @dev Check that price update was requested
+    ///      more than 1 update interval ago
+    ///      NOTE: m_leeway seconds added to offset possible timestamp inaccuracy
+    function updateRequestExpired() public view returns (bool) {
+        return ( (getTime() + m_leeway) >= (m_ETHPriceLastUpdateRequest + m_ETHPriceUpdateInterval) );
+    }
+
+    /// @dev to be overridden in tests
     function getTime() internal view returns (uint) {
         return now;
     }
@@ -121,6 +133,9 @@ contract EthPriceDependent is usingOraclize, multiowned {
     uint public m_ETHPriceInCents = 0;
     /// @notice unix timestamp of last update
     uint public m_ETHPriceLastUpdate;
+    /// @notice unix timestamp of last update request,
+    ///         don't allow requesting more than once per update interval
+    uint public m_ETHPriceLastUpdateRequest;
 
     /// @notice lower bound of the ETH price in cents
     uint public m_ETHPriceLowerBound = 100;
@@ -130,6 +145,6 @@ contract EthPriceDependent is usingOraclize, multiowned {
     /// @dev Update ETH price in cents every hour
     uint public m_ETHPriceUpdateInterval = 60*60;
 
-    /// @dev status of the price update
-    bool public m_ETHPriceUpdateRunning;
+    /// @dev offset time inaccuracy when checking update expiration date
+    uint public m_leeway = 30; // 30 seconds
 }

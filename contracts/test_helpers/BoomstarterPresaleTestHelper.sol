@@ -1,4 +1,4 @@
-pragma solidity 0.4.19;
+pragma solidity 0.4.23;
 
 import '../BoomstarterPresale.sol';
 
@@ -13,6 +13,7 @@ contract BoomstarterPresaleTestHelper is BoomstarterPresale {
         m_ETHPriceUpdateInterval = 5; // 5 seconds
         c_MinInvestmentInCents = 1 * 100; // $1
         m_ETHPriceInCents = 300*100; // $300
+        m_leeway = 0; // no offset
     }
 
     function setTime(uint time) public {

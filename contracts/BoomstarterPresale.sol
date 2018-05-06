@@ -1,4 +1,4 @@
-pragma solidity 0.4.19;
+pragma solidity 0.4.23;
 
 import './IBoomstarterToken.sol';
 import './EthPriceDependent.sol';
@@ -72,6 +72,9 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
         onlyIfSaleIsActive
         checkLimitsAndDates
     {
+        // don't allow to buy anything if price change was too long ago
+        // effectively enforcing a sale pause
+        require( !priceExpired() );
         address investor = msg.sender;
         uint256 payment = msg.value;
         require((payment.mul(m_ETHPriceInCents)).div(1 ether) >= c_MinInvestmentInCents);
@@ -119,8 +122,7 @@ contract BoomstarterPresale is ArgumentsChecker, ReentrancyGuard, EthPriceDepend
 
         m_token.transfer(investor, tokenAmount);
 
-        uint change;
-        change = msg.value.sub(payment);
+        uint change = msg.value.sub(payment);
         if (change > 0)
             investor.transfer(change);
 

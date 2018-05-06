@@ -1,4 +1,4 @@
-pragma solidity 0.4.19;
+pragma solidity 0.4.23;
 
 
 /// @title Interface of the BoomstarterToken.

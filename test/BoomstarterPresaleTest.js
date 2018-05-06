@@ -17,6 +17,8 @@ var nextIco;
 const totalSupply = 36e24; //36m tokens
 const production = false;
 
+var currentTime = 1520000000;
+
 contract('BoomstarterPresale', async function(accounts) {
   
     it("init", async function() {
@@ -28,7 +30,7 @@ contract('BoomstarterPresale', async function(accounts) {
         boomstarterPresaleTestHelper = await BoomstarterPresaleTestHelper.new(owners, boomstarterTokenTestHelper.address, beneficiary, production);
         await boomstarterTokenTestHelper.transfer( boomstarterPresaleTestHelper.address, totalSupply, {from: owners[0]});
         await boomstarterTokenTestHelper.switchToNextSale( boomstarterPresaleTestHelper.address, {from: owners[0]} );
-        await boomstarterPresaleTestHelper.setTime( 1520000000 );
+        await boomstarterPresaleTestHelper.setTime( currentTime );
         // set eth price to $300
         await boomstarterPresaleTestHelper.setETHPriceManually( 30000, {from: owners[0]} );
         await boomstarterPresaleTestHelper.setETHPriceManually( 30000, {from: owners[1]} );
@@ -64,10 +66,10 @@ contract('BoomstarterPresale', async function(accounts) {
                              new web3.BigNumber(expectedDifference));
     });
     it("check that investing after dateTo doesn't work", async function() {
-        await boomstarterPresaleTestHelper.setTime( 1530000000 );
+        await boomstarterPresaleTestHelper.setTime( currentTime + 10000000 );
         await expectThrow(boomstarterPresaleTestHelper.buy({from: buyers[0], value: web3.toWei(7, "ether")}));
         // return back to normal time
-        await boomstarterPresaleTestHelper.setTime( 1520000000 );
+        await boomstarterPresaleTestHelper.setTime( currentTime );
     });
     it("check that investing less than the minimum doesn't work", async function() {
         var notEnoughEther = web3.toWei(0.0001, "ether");
@@ -101,6 +103,10 @@ contract('BoomstarterPresale', async function(accounts) {
         await boomstarterPresaleTestHelper.updateETHPriceInCents({value: web3.toWei(1, "ether")});
 
         var testUpdateStep = 5; //seconds
+        // go forward in time for price update to rerun successfully on callback
+        currentTime += testUpdateStep;
+        await boomstarterPresaleTestHelper.setTime( currentTime );
+
         console.log("waiting for the price");
         var manualPrice = 20000;
         function waitForPriceUpdate( resolve ) {
@@ -119,9 +125,6 @@ contract('BoomstarterPresale', async function(accounts) {
             waitForPriceUpdate( resolve );
         });
 
-        // cannot run update again as it's already running
-        await expectThrow(boomstarterPresaleTestHelper.updateETHPriceInCents({value: web3.toWei(1, "ether")}));
-
         //cannot update price manually when it's just updated
         await boomstarterPresaleTestHelper.setETHPriceManually(10000, {from: owners[0]});
         await expectThrow(boomstarterPresaleTestHelper.setETHPriceManually(10000, {from: owners[1]}));
@@ -138,7 +141,8 @@ contract('BoomstarterPresale', async function(accounts) {
             });
         } else {
             //skip double the update seconds + one additional 
-            await boomstarterPresaleTestHelper.setTime( 1520000000 + testUpdateStep*3);
+            currentTime += testUpdateStep * 3;
+            await boomstarterPresaleTestHelper.setTime( currentTime );
         }
 
         //now that price has expired update the price to any value
@@ -157,7 +161,8 @@ contract('BoomstarterPresale', async function(accounts) {
             });
         } else {
             //skip one more double of update step + one additional step
-            await boomstarterPresaleTestHelper.setTime( 1520000000 + testUpdateStep*6);
+            currentTime += testUpdateStep * 3;
+            await boomstarterPresaleTestHelper.setTime( currentTime );
         }
 
         //now that price has expired update the price to any value
