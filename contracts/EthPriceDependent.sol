@@ -48,7 +48,8 @@ contract EthPriceDependent is usingOraclize, multiowned {
             oraclize_query(
                 m_ETHPriceUpdateInterval,
                 "URL",
-                "json(https://api.coinmarketcap.com/v1/ticker/ethereum/?convert=USD).0.price_usd"
+                "json(https://api.coinmarketcap.com/v1/ticker/ethereum/?convert=USD).0.price_usd",
+                m_callbackGas
             );
             m_ETHPriceLastUpdateRequest = getTime();
             NewOraclizeQuery("Oraclize query was sent");
@@ -109,6 +110,26 @@ contract EthPriceDependent is usingOraclize, multiowned {
     function topUp() external payable {
     }
 
+    /// @dev change gas price for oraclize calls,
+    ///      should be a compromise between speed and price according to market
+    /// @param _gasPrice gas price in wei
+    function setOraclizeGasPrice(uint _gasPrice)
+        external
+        onlymanyowners(keccak256(msg.data))
+    {
+        oraclize_setCustomGasPrice(_gasPrice);
+    }
+
+    /// @dev change gas limit for oraclize callback
+    ///      note: should be changed only in case of emergency
+    /// @param _callbackGas amount of gas
+    function setOraclizeGasLimit(uint _callbackGas)
+        external
+        onlymanyowners(keccak256(msg.data))
+    {
+        m_callbackGas = _callbackGas;
+    }
+
     /// @dev Check that double the update interval has passed
     ///      since last successful price update
     function priceExpired() public view returns (bool) {
@@ -142,9 +163,13 @@ contract EthPriceDependent is usingOraclize, multiowned {
     /// @notice upper bound of the ETH price in cents
     uint public m_ETHPriceUpperBound = 100000000;
 
-    /// @dev Update ETH price in cents every hour
-    uint public m_ETHPriceUpdateInterval = 60*60;
+    /// @dev Update ETH price in cents every 12 hours
+    uint public m_ETHPriceUpdateInterval = 60*60*12;
 
     /// @dev offset time inaccuracy when checking update expiration date
     uint public m_leeway = 30; // 30 seconds
+
+    /// @dev set just enough gas because the rest is not refunded
+    ///      (should be ~105000, additional 5000 just in case)
+    uint public m_callbackGas = 110000;
 }

@@ -28,7 +28,7 @@ var boomstarterPresaleAddress;
 
 module.exports = function(deployer, network) {
   deployer.then( function() {
-    return BoomstarterToken.deployed()
+    return BoomstarterToken.deployed();
   }).then( function(token){
     boomstarterToken = token;
     return deployer.deploy(BoomstarterPresale, _owners, token.address, beneficiary, production);
