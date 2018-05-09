@@ -170,6 +170,5 @@ contract EthPriceDependent is usingOraclize, multiowned {
     uint public m_leeway = 30; // 30 seconds
 
     /// @dev set just enough gas because the rest is not refunded
-    ///      (should be ~105000, additional 5000 just in case)
-    uint public m_callbackGas = 110000;
+    uint public m_callbackGas = 200000;
 }
