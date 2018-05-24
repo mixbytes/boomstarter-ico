@@ -226,8 +226,8 @@ We've suggested fixing of this  mechanism for prohibiting of running multiple in
 ```json(https://api.coinmarketcap.com/v1/ticker/ethereum/?convert=USD).0.price_usd```,
 which is both URL and data format dependent.
 
-We recommend to consider a mechanism to update the API connection string, 
- or a mechanism to provide a fallback switch to another API if the API changes (URL, data format) 
+We recommend to implement a mechanism of updating the API connection string, 
+ or a mechanism of providing a fallback switch to another API if the API changes (URL, data format) 
  or becomes unavailable for an extended period of time.
 
 ## "Out of Bounds" Stop of Automatic Price Update
@@ -241,19 +241,19 @@ We've suggested to add an automatic recovery mechanism and this was done in the 
 
 Affected area: ```EthPriceDependent.sol```, ```BoomstarterPresale.buy()```
 
-If ETH price drops suddenly below the ```m_ETHPriceLowerBound```, the sale is not stopped/paused which may cause 
- it to sell tokens for much lower value in USD then desired. 
+If ETH price drops suddenly below the ```m_ETHPriceLowerBound```, the sale doesn't stop/pause. 
+ As the result it sells tokens for a lower USD value then desired. 
 
-We've suggested to consider implementing an automatic sale pause mechanism if ETH price drops 
+We've suggested to implement an automatic sale pause mechanism if ETH price drops 
  below the ```m_ETHPriceLowerBound```.
 
 The change was made in the latest commit which affects this behaviour but doesn't fully resolve an issue:
 
-If ETH price drops suddenly below the ```m_ETHPriceLowerBound```, the sale is not paused immediately, 
- but only after 12 hours pass, which may cause it to sell tokens for much lower value in USD 
- then desired during this period of time.
+If ETH price drops suddenly below the ```m_ETHPriceLowerBound```, the sale doesn't pause immediately, 
+ but only after 12 hours period passes. As the result it sells tokens for a lower USD value 
+ then desired during these 12 hours.
 
-We're suggesting to consider implementing an automatic and immediate sale pause mechanism in response to abnormal 
+We suggest to implement an automatic and immediate sale pause mechanism in response to abnormal 
  ETH price drop.
 
 
