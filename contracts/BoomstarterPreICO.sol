@@ -63,7 +63,7 @@ contract BoomstarterPreICO is ArgumentsChecker, ReentrancyGuard, EthPriceDepende
     // PUBLIC interface: payments
 
     // fallback function as a shortcut
-    function() payable {
+    function() public payable {
         require(0 == msg.data.length);
         buy();  // only internal call here!
     }
@@ -110,7 +110,7 @@ contract BoomstarterPreICO is ArgumentsChecker, ReentrancyGuard, EthPriceDepende
         }
 
         // calculating a 20% bonus if the price of bought tokens is more than $30k
-        if (tokenAmount.mul(centsPerToken).div(1 ether) >= 3000000) {
+        if (payment.mul(m_ETHPriceInCents).div(1 ether) >= 3000000) {
             tokenAmount = tokenAmount.add(tokenAmount.div(5));
         }
 

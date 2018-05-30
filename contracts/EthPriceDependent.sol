@@ -167,7 +167,7 @@ contract EthPriceDependent is usingOraclize, multiowned {
     uint public m_ETHPriceUpdateInterval = 60*60*12;
 
     /// @dev offset time inaccuracy when checking update expiration date
-    uint public m_leeway = 30; // 30 seconds
+    uint public m_leeway = 900; // 15 minutes is the limit for miners
 
     /// @dev set just enough gas because the rest is not refunded
     uint public m_callbackGas = 200000;
