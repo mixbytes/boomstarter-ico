@@ -36,10 +36,16 @@ contract BoomstarterPreICO is ArgumentsChecker, ReentrancyGuard, EthPriceDepende
      * @param _owners Addresses to do administrative actions
      * @param _token Address of token being sold in this presale
      * @param _beneficiary Address of the wallet, receiving all the collected ether
+     * @param _updateInterval time between oraclize price updates in seconds
      * @param _production False if you use testrpc, true if mainnet and most testnets
      */
-    function BoomstarterPreICO(address[] _owners, address _token,
-                               address _beneficiary, bool _production)
+    function BoomstarterPreICO(
+        address[] _owners,
+        address _token,
+        address _beneficiary,
+        uint _updateInterval,
+        bool _production
+    )
         public
         payable
         EthPriceDependent(_owners, 2, _production)
@@ -50,7 +56,7 @@ contract BoomstarterPreICO is ArgumentsChecker, ReentrancyGuard, EthPriceDepende
         m_beneficiary = _beneficiary;
         m_active = true;
         // different update interval
-        m_ETHPriceUpdateInterval = 60*60*6;
+        m_ETHPriceUpdateInterval = _updateInterval;
     }
 
 
@@ -180,12 +186,12 @@ contract BoomstarterPreICO is ArgumentsChecker, ReentrancyGuard, EthPriceDepende
      *  @dev unix timestamp that sets preICO finish date, which means that after that date
      *       you cannot buy anything, but finish can happen before, if owners decide to do so
      */
-    uint public c_dateTo = 1532131200; // 21-Jul-18 00:00:00 UTC
+    uint public c_dateTo = 1532563200; // 26-Jul-18 00:00:00 UTC
 
     /// @dev current amount of tokens sold
     uint public m_currentTokensSold = 0;
     /// @dev limit of tokens to be sold during presale
-    uint public c_maximumTokensSold = uint(3000000) * uint(10) ** uint(18); // 3 million tokens
+    uint public c_maximumTokensSold = uint(5000000) * uint(10) ** uint(18); // 5 million tokens
 
     /// @notice usd price of BoomstarterToken in cents 
     uint public c_centsPerToken = 60; // $0.6

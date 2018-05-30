@@ -3,6 +3,9 @@
 const production = false;
 const testnet = false;
 
+const updateInterval = 60*60; // 1 hour
+const productionTokenAddress = "0x2Acb0BB95063756d66f67D0c9624b12CAc529fB3";
+
 var _owners;
 var beneficiary;
 if (production) {
@@ -35,10 +38,15 @@ var boomstarterToken;
 
 module.exports = function(deployer, network) {
   deployer.then( function() {
-    return BoomstarterToken.deployed();
+    if (production) {
+      return BoomstarterToken.at(productionTokenAddress);
+    } else {
+      return BoomstarterToken.deployed();
+    }
   }).then( function(token){
     boomstarterToken = token;
-    return deployer.deploy(BoomstarterPreICO, _owners, token.address, beneficiary, production || testnet);
+    return deployer.deploy(BoomstarterPreICO, _owners, token.address,
+                           beneficiary, updateInterval, production || testnet);
   })
   // Do manually:
   // presale.setNextSale( preICO.address ) multisig
