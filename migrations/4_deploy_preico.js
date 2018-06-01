@@ -3,6 +3,9 @@
 const production = false;
 const testnet = false;
 
+const updateInterval = 60*60; // 1 hour
+const productionTokenAddress = "0x2Acb0BB95063756d66f67D0c9624b12CAc529fB3";
+
 var _owners;
 var beneficiary;
 if (production) {
@@ -29,25 +32,23 @@ if (production) {
 }
 
 const BoomstarterToken = artifacts.require('BoomstarterToken.sol');
-const BoomstarterPresale = artifacts.require('BoomstarterPresale.sol');
+const BoomstarterPreICO = artifacts.require('BoomstarterPreICO.sol');
 
 var boomstarterToken;
-var boomstarterPresaleAddress;
 
-if (!production) {
-  module.exports = function(deployer, network) {
-    deployer.then( function() {
+module.exports = function(deployer, network) {
+  deployer.then( function() {
+    if (production) {
+      return BoomstarterToken.at(productionTokenAddress);
+    } else {
       return BoomstarterToken.deployed();
-    }).then( function(token){
-      boomstarterToken = token;
-      return deployer.deploy(BoomstarterPresale, _owners, token.address, beneficiary, testnet || production);
-    }).then( function() {
-      boomstarterPresaleAddress = BoomstarterPresale.address;
-      // send all tokens to the presale contract
-      return boomstarterToken.transfer( boomstarterPresaleAddress, 36000000*web3.toWei(1,"ether") );
-    }).then( function() {
-      // mark boomstarterPresale as a trusted sale account and revoke deployer's rights
-      return boomstarterToken.switchToNextSale( boomstarterPresaleAddress );
-    });
-  };
-}
+    }
+  }).then( function(token){
+    boomstarterToken = token;
+    return deployer.deploy(BoomstarterPreICO, _owners, token.address,
+                           beneficiary, updateInterval, production || testnet);
+  })
+  // Do manually:
+  // presale.setNextSale( preICO.address ) multisig
+  // presale.finishSale() multisig
+};

@@ -29,17 +29,33 @@ Wait for the bridge to deploy its contracts, then finally run the tests:
 
     $ truffle test
 
+To deploy on a testnet set `testnet` flag in all migrations to `true`
+
+```javascript
+var testnet = true;
+```
+
+Also, set appropriate addresses in the code defining addresses for testnet
+```javascript
+} else if (testnet) {
+  _owners = [
+...
+```
+
 ## Production
+
+Note, that stages already deployed to productoin go under `if (!producton)` condition. So full migration cycle runs only in testnet or ganache mode.
 
 Before running deploy please make sure the following values are correct:
 
 * in "migrations/" in all files starting from 2_: `production` should be `true`
-* in "migrations/" in all files starting from 2_: `_owners` and `beneficiary` should be replaced with appropriate values
+* in "migrations/" in all files starting from 2_: `_owners` and `beneficiary` under `if (production)` condition should be replaced with appropriate values
 * if you're going to use infura, then in "infura_conf.js", there should be appropriate `mnemonic` and `token`
 * in "truffle.js" in the network you are going to use, check that `gasPrice` equals to the current safe value [from here](https://ethgasstation.info/)
 * if you're going to use a local node, make sure it's syncronized, main account is unlocked (`--unlock <address>` in geth) and rpc mode is enabled (`--rpc` flag in geth)
+* check production<...> addresses (such as `productionTokenAddress`) in all migration files: they are the ones that are already deployed and should be used instead of relying on `.deployed()` artifacts
 
-To deploy (as example to infura ropsten) run:
+To deploy (as an example to infura ropsten) run:
 
     $ truffle migrate --network infura_ropsten
 
@@ -48,7 +64,7 @@ Look into "truffle.js" for different networks
 ## Usage
 ### Presale Summary
 
-1. During deploy, BoomstarterPresale automatically launches **updateEthPriceInCents()** and the first one is free. But keep in mind that first, the update will be completed after 1 hour, and second, when it's completed it's going to call delayed update once more. For this call to succeed you need to have your contract to have some ether for oraclize transactions. You can add ether by calling **topUp()** and specifying the amount of ether to send.
+1. During deploy, BoomstarterPresale automatically launches **updateEthPriceInCents()** and the first one is free. But keep in mind that first, the update will be completed after 12 hours, and second, when it's completed it's going to call delayed update once more. For this call to succeed you need to have your contract to have some ether for oraclize transactions. You can add ether by calling **topUp()** and specifying the amount of ether to send.
 2. If you provide ether before the first update, the update process will continue without any additional input from your part. If you don't - then update is most likely stopped: not enough ether to pay for an oraclize transaction. To start update again run **updateEthPriceInCents()**, it's payable, so you can provide some oraclize ether without calling **topUp()**. If the price is within the bounds, it is updated once contract gets reply from oraclize. If not - price is not updated, but another update request is still called. To change price bounds let owners call **setETHPriceUpperBound(uint _price)** / **setETHPriceLowerBound(uint _price)**. If you don't want or cannot start oraclize update, you can let owners call 
 **setETHPriceManually(uint _price)** to set price to any value (it's a backup option and not recommended + can only be called if price is expired or the update is not running)
 3. To check the price update status call either **priceExpired()** to check if the price was updated more than two update intervals ago, or **updateRequestExpired()**, which means update can be called once more. Note that **updateRequestExpired()** returning true doesn't mean, that the update stopped. The callback from oraclize might still come through and call update automatically, so it's adviced to rerun it taking into consideration oraclize lag.
@@ -56,6 +72,23 @@ Look into "truffle.js" for different networks
 5. If, at the time of investing, amount of tokens sold turns out more than the amount at which the price should increase (from $0.3 to $0.4 for a token), then the investor will receive only the part of tokens bought at the lower price, remaining ether will be refunded. All following calls to **buy()** will be using the higher price (as all lower-price tokens are sold now)
 6. Same goes if amount of tokens sold is more than the amount provided for presale: remaining ether will be refunded to the investor.
 7. When the sale is finished owners should call **finishSale()** to transfer all remaining tokens and ether to the new sale contract. Note that the new sale contract should be set before calling finish. Do that with **setNextSale(address _sale)** function (multisig required).
+
+
+### PreICO Summary
+
+PreICO is the same as Presale (see **Presale Summary**) except for the following differences:
+1. Update repeats every 1 hour instead of every 12 hours
+2. Price of tokens is constant and is equal to $0.6
+4. Big investors (investing equal or more than $30k) receive a bonus of +20% tokens from the amount bought. Note, that the amount of an investment is calculated taking into account the sale cap (which is 5 million tokens) and not just the amount of ether sent during investment transaction. If the resulting number of tokens bought (without bonus) exceeds the sale cap, maximum available amount is used instead, and the investor receives the ether remainder. The actual ether amount left is used to calculate if the investor should receive the bonus or not (bonus is not affected by the sale cap, but for obvious reasons it can only happen once for the last investor buying all remaining in that sale tokens)
+
+Full summary for convenience (modified Presale Summary):
+1. During deploy, BoomstarterPreICO automatically launches **updateEthPriceInCents()** and the first one is free. But keep in mind that first, the update will be completed after 1 hours, and second, when it's completed it's going to call delayed update once more. For this call to succeed you need to have your contract to have some ether for oraclize transactions. You can add ether by calling **topUp()** and specifying the amount of ether to send.
+2. If you provide ether before the first update, the update process will continue without any additional input from your part. If you don't - then update is most likely stopped: not enough ether to pay for an oraclize transaction. To start update again run **updateEthPriceInCents()**, it's payable, so you can provide some oraclize ether without calling **topUp()**. If the price is within the bounds, it is updated once contract gets reply from oraclize. If not - price is not updated, but another update request is still called. To change price bounds let owners call **setETHPriceUpperBound(uint _price)** / **setETHPriceLowerBound(uint _price)**. If you don't want or cannot start oraclize update, you can let owners call 
+**setETHPriceManually(uint _price)** to set price to any value (it's a backup option and not recommended + can only be called if price is expired or the update is not running)
+3. To check the price update status call either **priceExpired()** to check if the price was updated more than two update intervals ago, or **updateRequestExpired()**, which means update can be called once more. Note that **updateRequestExpired()** returning true doesn't mean, that the update stopped. The callback from oraclize might still come through and call update automatically, so it's adviced to rerun it taking into consideration oraclize lag.
+4. When price is ready, investors can call **buy()**, tokens will be assigned to the buyer, ether will be transferred to the account specified as `beneficiary` during deploy. The amount of tokens will be calculated from the constant token price of $0.6 and the ether price, retrieved from oraclize or set by owners. NOTE: **buy()** cannot be called if **priceExpired()** returns `true`.
+5. Big investors (investing equal or more than $30k) receive a bonus of +20% tokens from the amount bought. Note, that the amount of an investment is calculated taking into account the sale cap (which is 5 million tokens) and not just the amount of ether sent during investment transaction. If the resulting number of tokens bought (without bonus) exceeds the sale cap, maximum available amount is used instead, and the investor receives the ether remainder. The actual ether amount left is used to calculate if the investor should receive the bonus or not (bonus is not affected by the sale cap, but for obvious reasons it can only happen once for the last investor buying all remaining in that sale tokens)
+6. When the sale is finished owners should call **finishSale()** to transfer all remaining tokens and ether to the new sale contract. Note that the new sale contract should be set before calling finish. Do that with **setNextSale(address _sale)** function (multisig required).
 
 ### BoomstarterToken Summary
 
@@ -66,7 +99,7 @@ Look into "truffle.js" for different networks
 
 
 ## Functions Reference
-### BoomstarterPresale contract
+### BoomstarterPresale contract _and_ BoomstarterPreICO contract
 
 **buy()** / **fallback function**
 
@@ -79,7 +112,7 @@ Requirements:
 
 **updateETHPriceInCents()**
 
-Function to run price update process in case it's not running yet. Is payable, put some ether for oraclize queries to use. Update continues indefinitely with the interval of 1 hour. Process stops if all ether is depleted.
+Function to run price update process in case it's not running yet. Is payable, put some ether for oraclize queries to use. Update continues indefinitely with the interval of 12 hours (Presale) or 1 hour (PreICO). Process stops if all ether is depleted.
 
 Requirements:
 * update process shouldn't be already active, see **updateRequestExpired()**
