@@ -1,6 +1,6 @@
-# Boomstarter ICO Audit: *Private Sale Phase*
+# Boomstarter ICO Audit: *Private Sale, Presale Phases*
 
-May, 2018
+June, 2018
 
 Authored by [Basil Gorin](https://www.linkedin.com/in/gorin/), reviewed and contributed by [Vladimir Ovcharov](https://www.linkedin.com/in/vladimirovcharov/)
 
@@ -19,12 +19,14 @@ An audit is performed in the fork: https://github.com/vgorin/boomstarter-ico
    ```
    contracts/
       test_helpers/
+         BoomstarterPreICOTestHelper.sol
          BoomstarterPresaleTestHelper.sol
          BoomstarterTokenTestHelper.sol
          TestApprovalRecipient.sol
       token/
          BurnableToken.sol
          TokenWithApproveAndCallMethod.sol
+      BoomstarterPreICO.sol
       BoomstarterPresale.sol
       BoomstarterToken.sol
       EthPriceDependent.sol
@@ -37,6 +39,7 @@ An audit is performed in the fork: https://github.com/vgorin/boomstarter-ico
       1_initial_migration.js
       2_deploy_token.js
       3_deploy_presale.js
+      4_deploy_preico.js
    ```
 
 ## Out of Scope:
@@ -67,8 +70,10 @@ An audit is performed in the fork: https://github.com/vgorin/boomstarter-ico
       *
    ```
 
-The final git commit hash evaluated is ```7491b44c4eb2b6787c283efc082cdc306ba2d893```. 
+The final git commit hash evaluated is ```3145da86e9c4b89cd0e193587c6d204e626953f3```. 
  Herein and throughout the document is referenced as the *latest* commit.
+
+First version of this document evaluated git commit hash ```7491b44c4eb2b6787c283efc082cdc306ba2d893```.
 
 This document also highlights issues found in previous versions of the project 
  (hashes ```85b20f627a47c30a44858036e70dec1bdbbfd53c``` and ```3c7a5caac709a6239ed25fe66524d06873410348```) 
@@ -109,6 +114,9 @@ The owners are:
 * [```0xB22D86AAC527A68327ECC99667e98429C2d4E2eb```](https://etherscan.io/address/0xB22D86AAC527A68327ECC99667e98429C2d4E2eb)
 
 The quorum is two votes out of three.
+
+The token is being sold in phases. During each phase the token being sold is owned by a crowdsale smart contract. 
+ After the sale finishes the token may be transferred to the next crowdsale by a quorum of owners.
 
 After all the sale phases are finished the token may be released by the owners to become fully feature reached 
  [ERC20](https://en.wikipedia.org/wiki/ERC20) token without any limitations on transferring and trading.
