@@ -50,4 +50,8 @@ if (!production) {
       return boomstarterToken.switchToNextSale( boomstarterPresaleAddress );
     });
   };
+} else {
+  module.exports = function(deployer, network) {
+    return;
+  }
 }

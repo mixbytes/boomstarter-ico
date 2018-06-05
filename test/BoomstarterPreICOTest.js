@@ -239,4 +239,17 @@ contract('BoomstarterPreICO', async function(accounts) {
             new web3.BigNumber(expectedEtherDifference));
 
     });
+    it("check cap", async function() {
+      var initialBeneficiaryAmount = await web3.eth.getBalance(beneficiary);
+      await preIco.buy({from: buyers[2], value: web3.toWei(33, "ether")});
+      // remaining tokens are 150k - 105k - 1k = 44k
+      // ether price would be 44000 * 0.6 / 1000 = 26.4
+      var expectedEtherDifference = 26.4e18;
+      var resultBeneficiaryAmount = await web3.eth.getBalance(beneficiary);
+      assertBigNumberEqual(new web3.BigNumber(resultBeneficiaryAmount - initialBeneficiaryAmount),
+            new web3.BigNumber(expectedEtherDifference));
+
+      var expectedAmountOfTokens = 149000 * 1e18;
+      assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(buyers[2]), expectedAmountOfTokens);
+    });
 });
