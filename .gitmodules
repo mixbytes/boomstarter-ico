@@ -1,0 +1,4 @@
+[submodule "minter-service"]
+	path = minter-service
+	url = git@github.com:mixbytes/minter-service.git
+        branch = f/DEV-146_boomstarter_integration
