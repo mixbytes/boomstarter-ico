@@ -1,7 +1,8 @@
 .PHONY: compile test logs
 
 NPM_BIN := node_modules/.bin
-TEST_FILE:= 
+TEST_FILE:=
+
 node_modules:
 	npm install
 
@@ -10,6 +11,8 @@ compile: node_modules
 
 start:
 	docker-compose up -d
+restart:
+    docker-compose restart
 logs:
 	docker-compose logs -f 
 stop:
