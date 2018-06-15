@@ -6,6 +6,7 @@ import './EthPriceDependent.sol';
 import './crowdsale/FundsRegistry.sol';
 import './crowdsale/TeamTokens.sol';
 import './IBoomstarterToken.sol';
+import '../minter-service/contracts/IICOInfo.sol';
 
 /// @title a basic interface for private sale and preICO
 ///        only needed to get the amount sold previously
@@ -14,7 +15,7 @@ contract PreviousSale {
 }
 
 /// @title Boomstarter ICO contract
-contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent {
+contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent, IICOInfo {
 
     // TODO also check that Ico has tokens on its account
 
@@ -32,8 +33,9 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     /// @dev triggers some state changes based on current time
     /// @param investor optional refund parameter
     /// @param payment optional refund parameter
-    /// note: function body could be skipped!
+    /// note: function body could be skipped!    
     modifier timedStateChange(address investor, uint payment) {
+        
         if (IcoState.INIT == m_state && getTime() >= getStartTime())
             changeState(IcoState.ACTIVE);
 
@@ -67,6 +69,20 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
                 m_lastFundsAmount = m_funds.balance;
             }
         }
+    }
+
+    function estimate(uint256 _wei) public constant returns (uint tokens) {
+        uint tokenCurrentPrice = getPrice();
+        uint amount = _wei.mul(m_ETHPriceInCents).div(tokenCurrentPrice);
+        return amount;
+    }
+
+    function purchasedTokenBalanceOf(address addr) public constant returns (uint256 tokens) {
+        return m_token.balanceOf(addr);
+
+    }
+    function sentEtherBalanceOf(address addr) public constant returns (uint256 _wei) {
+        return m_funds.getWeiBalance(addr);
     }
 
 
@@ -134,6 +150,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     {
         require(msg.sender == m_nonEtherController);
         internalBuy(investor, etherEquivalentAmount, false);
+
     }
 
     /// @dev common buy for ether and non-ether
@@ -424,4 +441,5 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
 
     /// @dev save deployer for easier initialization
     address public m_deployer;
+
 }
