@@ -1,7 +1,7 @@
 .PHONY: compile test logs
 
 NPM_BIN := node_modules/.bin
-
+TEST_FILE:= 
 node_modules:
 	npm install
 
@@ -16,7 +16,7 @@ stop:
 	docker-compose down -t 1
 
 test: start
-	$(NPM_BIN)/truffle test
+	$(NPM_BIN)/truffle test $(TEST_FILE)
 
 clean_build:
 	rm -rf build
