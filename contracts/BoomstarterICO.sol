@@ -83,7 +83,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
 
     }
     function sentEtherBalanceOf(address addr) public constant returns (uint256 _wei) {
-        return m_funds.getWeiBalance(addr);
+        return m_funds.m_weiBalances(addr);
     }
 
 
