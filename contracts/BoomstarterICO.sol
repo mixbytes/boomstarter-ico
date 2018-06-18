@@ -7,6 +7,7 @@ import './crowdsale/FundsRegistry.sol';
 import './crowdsale/TeamTokens.sol';
 import './IBoomstarterToken.sol';
 import '../minter-service/contracts/IICOInfo.sol';
+import '../minter-service/contracts/IMintableToken.sol';
 
 /// @title a basic interface for private sale and preICO
 ///        only needed to get the amount sold previously
@@ -15,7 +16,7 @@ contract PreviousSale {
 }
 
 /// @title Boomstarter ICO contract
-contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent, IICOInfo {
+contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent, IICOInfo, IMintableToken {
 
     // TODO also check that Ico has tokens on its account
 
@@ -140,6 +141,11 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
     function buy() public payable {     // dont mark as external!
         internalBuy(msg.sender, msg.value, true);
     }
+
+    function mint(address investor, uint256 ethers) public {
+        nonEtherBuy(investor, ethers);
+    }
+
 
     /// @notice register investments coming in different currencies
     /// @dev can only be called by a special controller account

@@ -134,6 +134,49 @@ contract('BoomstarterICO', async function(accounts) {
 
         assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(buyers[1]), expectedAmountOfTokens);
     });
+
+    it("check ICOInfo contract methods", async function() {
+        // check estimate
+        var expectedAmountOfTokens = 2    * // ethers
+                                     300  * // current ether price in cents
+                                     1e18 / // wei conversion
+                                     0.8;   // current token price
+                                     // result = 750
+        var resultEstimate = await ico.estimate(web3.toWei(2, "ether"));
+        assertBigNumberEqual(new web3.BigNumber(resultEstimate), new web3.BigNumber(expectedAmountOfTokens));
+
+        // check purchased token balance
+        await ico.buy({from: buyers[2], value: web3.toWei(2, "ether")});
+
+
+        var actualTokenBalance = await boomstarterTokenTestHelper.balanceOf(buyers[2]);
+        var expectedTokenBalance = await ico.purchasedTokenBalanceOf(buyers[2]);
+
+        assertBigNumberEqual(actualTokenBalance, expectedTokenBalance);
+
+        // check ether balance
+        var etherBalance = await ico.sentEtherBalanceOf(buyers[2]);
+
+
+        assertBigNumberEqual(
+            new web3.BigNumber(etherBalance),
+            new web3.BigNumber(web3.toWei(2, "ether")));
+
+        await ico.nonEtherBuy(buyers[2], web3.toWei(2, "ether"), {from: owners[1]});
+
+        etherBalance = await ico.sentEtherBalanceOf(buyers[2]);
+
+        var actualTokenBalanceAfterNonEtherBuy = await ico.purchasedTokenBalanceOf(buyers[2]);
+
+        assertBigNumberEqual(new web3.BigNumber(actualTokenBalanceAfterNonEtherBuy),
+                             new web3.BigNumber(expectedAmountOfTokens + expectedAmountOfTokens))
+
+        assertBigNumberEqual(
+                    new web3.BigNumber(etherBalance),
+                    new web3.BigNumber(web3.toWei(2, "ether")));
+
+    });
+
     it("check price update", async function() {
         // running new update request with smaller update interval
         await ico.updateETHPriceInCents({value: web3.toWei(1, "ether")});
@@ -187,6 +230,7 @@ contract('BoomstarterICO', async function(accounts) {
         await ico.setETHPriceManually(20000, {from: owners[0]});
         await ico.setETHPriceManually(20000, {from: owners[1]});
     });
+
     it("finish-fail ico", async function() {
 
         // time is up
