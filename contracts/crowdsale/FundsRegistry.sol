@@ -4,6 +4,7 @@ import 'mixbytes-solidity/contracts/ownership/MultiownedControlled.sol';
 import 'mixbytes-solidity/contracts/security/ArgumentsChecker.sol';
 import 'zeppelin-solidity/contracts/math/SafeMath.sol';
 import 'zeppelin-solidity/contracts/ReentrancyGuard.sol';
+import '../IBoomstarterToken.sol';
 
 
 /// @title registry of funds sent by investors
@@ -20,7 +21,7 @@ contract FundsRegistry is ArgumentsChecker, MultiownedControlled, ReentrancyGuar
     }
 
     event StateChanged(State _state);
-    event Invested(address indexed investor, uint256 amount);
+    event Invested(address indexed investor, uint etherInvested, uint tokensReceived);
     event EtherSent(address indexed to, uint value);
     event RefundSent(address indexed to, uint value);
 
@@ -33,9 +34,15 @@ contract FundsRegistry is ArgumentsChecker, MultiownedControlled, ReentrancyGuar
 
     // PUBLIC interface
 
-    function FundsRegistry(address[] _owners, uint _signaturesRequired, address _controller)
+    function FundsRegistry(
+        address[] _owners,
+        uint _signaturesRequired,
+        address _controller,
+        address _token
+    )
         MultiownedControlled(_owners, _signaturesRequired, _controller)
     {
+        m_token = IBoomstarterToken(_token);
     }
 
     /// @dev performs only allowed state transitions
@@ -53,7 +60,9 @@ contract FundsRegistry is ArgumentsChecker, MultiownedControlled, ReentrancyGuar
     }
 
     /// @dev records an investment
-    function invested(address _investor)
+    /// @param _investor who invested
+    /// @param _tokenAmount the amount of token bought, calculation is handled by ICO
+    function invested(address _investor, uint _tokenAmount)
         external
         payable
         onlyController
@@ -70,8 +79,9 @@ contract FundsRegistry is ArgumentsChecker, MultiownedControlled, ReentrancyGuar
         // register payment
         totalInvested = totalInvested.add(amount);
         m_weiBalances[_investor] = m_weiBalances[_investor].add(amount);
+        m_tokenBalances[_investor] = m_tokenBalances[_investor].add(_tokenAmount);
 
-        Invested(_investor, amount);
+        Invested(_investor, amount, _tokenAmount);
     }
 
     /// @notice owners: send `value` of ether to address `to`, can be called if crowdsale succeeded
@@ -80,7 +90,7 @@ contract FundsRegistry is ArgumentsChecker, MultiownedControlled, ReentrancyGuar
     function sendEther(address to, uint value)
         external
         validAddress(to)
-        onlymanyowners(sha3(msg.data))
+        onlymanyowners(keccak256(msg.data))
         requiresState(State.SUCCEEDED)
     {
         require(value > 0 && this.balance >= value);
@@ -88,21 +98,43 @@ contract FundsRegistry is ArgumentsChecker, MultiownedControlled, ReentrancyGuar
         EtherSent(to, value);
     }
 
-    // TODO force user to approve giving back all their tokens
+    /// @notice owners: send `value` of tokens to address `to`, can be called if
+    ///         crowdsale failed and some of the investors refunded the ether
+    /// @param to where to send tokens
+    /// @param value amount of token-wei to send
+    function sendTokens(address to, uint value)
+        external
+        validAddress(to)
+        onlymanyowners(keccak256(msg.data))
+        requiresState(State.REFUNDING)
+    {
+        require(value > 0 && m_token.balanceOf(this) >= value);
+        m_token.transfer(to, value);
+    }
+
     /// @notice withdraw accumulated balance, called by payee in case crowdsale failed
+    /// @dev caller should approve tokens bought during ICO to this contract
     function withdrawPayments()
         external
         nonReentrant
         requiresState(State.REFUNDING)
     {
         address payee = msg.sender;
-        uint256 payment = m_weiBalances[payee];
+        uint payment = m_weiBalances[payee];
+        uint tokens = m_tokenBalances[payee];
 
+        // check that there is some ether to withdraw
         require(payment != 0);
+        // check that the contract holds enough ether
         require(this.balance >= payment);
+        // check that the investor (payee) gives back all tokens bought during ICO
+        require(m_token.allowance(payee, this) >= m_tokenBalances[payee]);
 
         totalInvested = totalInvested.sub(payment);
         m_weiBalances[payee] = 0;
+        m_tokenBalances[payee] = 0;
+
+        m_token.transferFrom(payee, this, tokens);
 
         payee.transfer(payment);
         RefundSent(payee, payment);
@@ -121,6 +153,12 @@ contract FundsRegistry is ArgumentsChecker, MultiownedControlled, ReentrancyGuar
     /// @dev balances of investors in wei
     mapping(address => uint256) public m_weiBalances;
 
+    /// @dev balances of tokens sold to investors
+    mapping(address => uint256) public m_tokenBalances;
+
     /// @dev list of unique investors
     address[] public m_investors;
+
+    /// @dev token accepted for refunds
+    IBoomstarterToken public m_token;
 }

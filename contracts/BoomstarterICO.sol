@@ -4,22 +4,13 @@ import 'mixbytes-solidity/contracts/security/ArgumentsChecker.sol';
 import 'zeppelin-solidity/contracts/ReentrancyGuard.sol';
 import './EthPriceDependent.sol';
 import './crowdsale/FundsRegistry.sol';
-import './crowdsale/TeamTokens.sol';
 import './IBoomstarterToken.sol';
 import '../minter-service/contracts/IICOInfo.sol';
 import '../minter-service/contracts/IMintableToken.sol';
 import '../minter-service/contracts/ReenterableMinter.sol';
 
-/// @title a basic interface for private sale and preICO
-///        only needed to get the amount sold previously
-contract PreviousSale {
-    uint public m_currentTokensSold;
-}
-
 /// @title Boomstarter ICO contract
 contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent, IICOInfo, IMintableToken {
-
-    // TODO also check that Ico has tokens on its account
 
     enum IcoState { INIT, ACTIVE, PAUSED, FAILED, SUCCEEDED }
 
@@ -90,43 +81,41 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
 
     // PUBLIC interface
 
-    function BoomstarterICO(address[] _owners, address _token, bool _production, address[] _previousSales)
+    function BoomstarterICO(address[] _owners, address _token, bool _production)
         public
         payable
         EthPriceDependent(_owners, 2, _production)
-        multiowned(_owners, 2)
         validAddress(_token)
     {
         require(3 == _owners.length);
 
         m_token = IBoomstarterToken(_token);
         m_deployer = msg.sender;
-
-        // FIXME doesn't work if deployed while other sale is still active
-        //       make a separate start function and in constructor just save addresses
-        // subtract previously sold tokens
-        for (uint i = 0; i < _previousSales.length; i++) {
-            m_previousSalesTokensSold = m_previousSalesTokensSold.add( PreviousSale(_previousSales[i]).m_currentTokensSold() );
-        }
-        // calculate remaining tokens and leave 25% for the team
-        c_maximumTokensSold = m_token.totalSupply().sub(m_previousSalesTokensSold).mul(3).div(4);
     }
 
     /// @dev set addresses for ether and token storage
     ///      performed once by deployer
     /// @param _funds FundsRegistry address
-    /// @param _teamTokens TeamTokens address
-    function init(address _funds, address _teamTokens)
+    /// @param _tokenDistributor address to send remaining tokens to after ICO
+    /// @param _previouslySold how much sold in previous sales in cents
+    function init(address _funds, address _tokenDistributor, uint _previouslySold)
         external
         validAddress(_funds)
-        validAddress(_teamTokens)
+        validAddress(_tokenDistributor)
+        onlymanyowners(keccak256(msg.data))
     {
-        // allow only original deployer to set the addresses
-        require(msg.sender == m_deployer);
-        // only once
-        require(m_funds == address(0) && m_teamTokens == address(0));
+        // can be set only once
+        require(m_funds == address(0));
         m_funds = FundsRegistry(_funds);
-        m_teamTokens = TeamTokens(_teamTokens);
+
+        // calculate remaining tokens and leave 25% for manual allocation
+        c_maximumTokensSold = m_token.balanceOf(this).sub( m_token.totalSupply().div(4) );
+
+        // manually set how much should be sold taking into account previously collected
+        c_softCapUsd = c_softCapUsd.sub(_previouslySold);
+
+        // set account that allocates the rest of tokens after ico succeeds
+        m_tokenDistributor = _tokenDistributor;
     }
 
 
@@ -170,12 +159,12 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
         timedStateChange(investor, payment)
         fundsChecker(investor, payment)
     {
+        // don't allow to buy anything if price change was too long ago
+        // effectively enforcing a sale pause
+        require( !priceExpired() );
         require(m_state == IcoState.ACTIVE || m_state == IcoState.INIT && isOwner(investor) /* for final test */);
 
         require((payment.mul(m_ETHPriceInCents)).div(1 ether) >= c_MinInvestmentInCents);
-
-        // check that ether doesn't go anywhere unexpected
-        uint startingInvariant = this.balance.add(m_funds.balance);
 
         uint tokenCurrentPrice = getPrice();
 
@@ -186,11 +175,18 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
 
         if (amount.add(m_currentTokensSold) > c_maximumTokensSold) {
             amount = c_maximumTokensSold.sub( m_currentTokensSold );
-            change = payment.sub( amount );
+            uint ethPerToken = tokenCurrentPrice.mul(1 ether).div(m_ETHPriceInCents);
+            payment = ethPerToken.mul(amount).div(1 ether);
+            change = payment.sub(amount);
+        }
+
+        // calculating a 20% bonus if the price of bought tokens is more than $50k
+        if (payment.mul(m_ETHPriceInCents).div(1 ether) >= 5000000) {
+            amount = amount.add(amount.div(5));
         }
 
         // change ICO investment stats
-        m_currentUsdAccepted = m_currentUsdAccepted.add( amount.mul(tokenCurrentPrice) );
+        m_currentUsdAccepted = m_currentUsdAccepted.add( amount.mul(tokenCurrentPrice).div(1 ether) );
         m_currentTokensSold = m_currentTokensSold.add( amount );
 
         // send bought tokens to the investor
@@ -198,7 +194,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
 
         if (refundable) {
             // record payment if paid in ether
-            m_funds.invested.value(payment)(investor);
+            m_funds.invested.value(payment)(investor, amount);
             FundTransfer(investor, payment, true);
         } else {
             // don't record if paid in different currency
@@ -213,10 +209,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
 
             // send change
             investor.transfer(change);
-            assert(startingInvariant == this.balance.add(m_funds.balance).add(change));
         }
-        else
-            assert(startingInvariant == this.balance.add(m_funds.balance));
     }
 
 
@@ -268,14 +261,17 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
         checkTime();
     }
 
-    /// @notice consider paused ICO as failed
-    function fail()
+    /// @notice withdraw tokens if ico failed
+    /// @param _to address to send tokens to
+    /// @param _amount amount of tokens in token-wei
+    function withdrawTokens(address _to, uint _amount)
         external
-        timedStateChange(address(0), 0)
-        requiresState(IcoState.PAUSED)
+        validAddress(_to)
+        requiresState(IcoState.FAILED)
         onlymanyowners(keccak256(msg.data))
     {
-        changeState(IcoState.FAILED);
+        require((_amount > 0) && (m_token.balanceOf(this) >= _amount));
+        m_token.transfer(_to, _amount);
     }
 
     /// @notice In case we need to attach to existent token
@@ -367,19 +363,12 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
     }
 
     function onSuccess() private {
-        uint totalTokensSold = m_currentTokensSold.add(m_previousSalesTokensSold);
-        // send tokens for owners: should be 25% of total
-        uint tokensForTeam = totalTokensSold.div(3);
-        m_token.transfer(m_teamTokens, tokensForTeam);
-        // now owners can withdraw tokens according to TeamTokens rules
-        m_teamTokens.init();
-
         // allow owners to withdraw collected ether
         m_funds.changeState(FundsRegistry.State.SUCCEEDED);
         m_funds.detachController();
 
-        // burn all remaining tokens
-        m_token.burn(m_token.balanceOf(this));
+        // send all remaining tokens to the address responsible for dividing them into pools
+        m_token.transfer(m_tokenDistributor, m_token.balanceOf(this));
     }
 
     function onFailure() private {
@@ -423,8 +412,8 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
     /// @dev contract responsible for token accounting
     IBoomstarterToken public m_token;
 
-    /// @dev contract responsile for team token allocation
-    TeamTokens public m_teamTokens;
+    /// @dev address responsile for allocation of the tokens left if ICO succeeds
+    address public m_tokenDistributor;
 
     /// @dev contract responsible for investments accounting
     FundsRegistry public m_funds;
@@ -441,11 +430,8 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
     /// @notice current amount of tokens sold
     uint public m_currentTokensSold;
 
-    /// @notice previous sales total stats
-    uint public m_previousSalesTokensSold;
-
     /// @dev limit of tokens to be sold during ICO, need to leave 25% for the team
-    ///      calculated from the previous sales
+    ///      calculated from the current balance and the total supply
     uint public c_maximumTokensSold;
 
     /// @dev current usd accepted during ICO, in cents
