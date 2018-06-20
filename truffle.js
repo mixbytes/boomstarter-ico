@@ -15,6 +15,13 @@ module.exports = {
       gas: 47000000
     },
 
+    rinkeby: {
+        host: "localhost",
+        port: 8545,
+        network_id: 4,
+        gasPrice: 1000000000
+    },
+
     ropsten: {  // locally-run testnet
       host: "localhost",
       port: 8545,

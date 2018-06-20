@@ -1,7 +1,21 @@
 'use strict';
 
-const production = false;
-const testnet = false;
+const production = process.env.PRODUCTION != null ;
+const testnet = process.env.TESTNET != null;
+const testnet_rinkeby = process.env.TESTNET_RINKEBY != null;
+
+console.log(
+"\n\n\n\x1b[32m####################\n" +
+"Migration environment\n" +
+"production: " + (production) + "\n" +
+"testnet: " + (testnet) + "\n" +
+"testnet_rinkeby: " + (testnet_rinkeby) + "\n" +
+"####################\x1b[0m\n"
+)
+
+console.log("\x1b[33mDeploy preico\x1b[0m\n")
+
+
 
 const updateInterval = 60*60; // 1 hour
 const productionTokenAddress = "0x2Acb0BB95063756d66f67D0c9624b12CAc529fB3";
@@ -22,7 +36,14 @@ if (production) {
       '0x3c832c4cb16ffee070334ed59e30e8d149556ef4',
   ];
   beneficiary = '0x47900c119370cc3ad78cbda6f39a0abc75e39ae1';
-} else {
+} else if (testnet_rinkeby) {
+    _owners = [
+        '0xe4bebb493e6c7663e1f3c6b463c7b573bd051ccf',
+        '0x1462d1bbf707128437a17310fd784c24a1dda846',
+        '0x3bb48c702a5b67b58d93efa5043f186fe375fdb0'
+    ];
+    beneficiary = '0x405bcc9dffef668ee1dbc09ff82158032823641f';
+  } else {
   _owners = [
       web3.eth.accounts[0],
       web3.eth.accounts[1],
@@ -46,7 +67,7 @@ module.exports = function(deployer, network) {
   }).then( function(token){
     boomstarterToken = token;
     return deployer.deploy(BoomstarterPreICO, _owners, token.address,
-                           beneficiary, updateInterval, production || testnet);
+                           beneficiary, updateInterval, production || testnet || testnet_rinkeby);
   })
   // Do manually:
   // presale.setNextSale( preICO.address ) multisig
