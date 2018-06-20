@@ -8,6 +8,7 @@ import './crowdsale/TeamTokens.sol';
 import './IBoomstarterToken.sol';
 import '../minter-service/contracts/IICOInfo.sol';
 import '../minter-service/contracts/IMintableToken.sol';
+import '../minter-service/contracts/ReenterableMinter.sol';
 
 /// @title a basic interface for private sale and preICO
 ///        only needed to get the amount sold previously
@@ -307,6 +308,14 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
         onlymanyowners(keccak256(msg.data))
     {
         m_nonEtherController = _controller;
+    }
+
+    function getNonEtherController()
+        public
+        view
+        returns (address)
+    {
+        return m_nonEtherController;
     }
 
     /// @notice explicit trigger for timed state changes
