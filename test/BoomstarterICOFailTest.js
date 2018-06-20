@@ -20,7 +20,6 @@ var buyers;
 var preIco;
 var ico;
 var fundsRegistry;
-var teamTokens;
 
 const totalSupply = 36e24; //36m tokens
 const production = false;
@@ -28,7 +27,7 @@ const production = false;
 var currentTime = 1520000000;
 var timeStep =       9999999;
 
-contract('BoomstarterICO', async function(accounts) {
+contract('BoomstarterICO fail', async function(accounts) {
   
     it("init", async function() {
 
@@ -62,11 +61,11 @@ contract('BoomstarterICO', async function(accounts) {
                              new web3.BigNumber(expectedEtherDifference));
     });
     it("init ico", async function() {
-        ico = await BoomstarterICOTestHelper.new(owners, boomstarterTokenTestHelper.address, production, [preIco.address, preIco.address]);
-        fundsRegistry = await FundsRegistry.new(owners, 2, ico.address);
-        teamTokens = await TeamTokens.new(owners, 2, ico.address, boomstarterTokenTestHelper.address);
+        ico = await BoomstarterICOTestHelper.new(owners, boomstarterTokenTestHelper.address, production);
+        fundsRegistry = await FundsRegistry.new(owners, 2, ico.address, boomstarterTokenTestHelper.address);
 
-        await ico.init(fundsRegistry.address, teamTokens.address);
+        await boomstarterTokenTestHelper.setSale( fundsRegistry.address, true, {from: owners[0]} );
+        await boomstarterTokenTestHelper.setSale( fundsRegistry.address, true, {from: owners[1]} );
 
         await ico.setTime( currentTime );
         await ico.setETHPriceManually( 30000, {from: owners[0]} );
@@ -86,8 +85,11 @@ contract('BoomstarterICO', async function(accounts) {
         assertBigNumberEqual( await boomstarterTokenTestHelper.balanceOf( preIco.address ), new web3.BigNumber(0) );
         assertBigNumberEqual( await web3.eth.getBalance( preIco.address ), new web3.BigNumber(0) );
 
+        await ico.init(fundsRegistry.address, beneficiary, 100000, {from: owners[0]});
+        await ico.init(fundsRegistry.address, beneficiary, 100000, {from: owners[1]});
+
         // allowed amount of tokens, subtracting previously sold tokens and 25% for the team
-        var expectedAmount = (36000000e18 - 1000e18)*3/4;
+        var expectedAmount = 36000000e18*3/4 - 500e18;
         assertBigNumberEqual( await ico.c_maximumTokensSold(), expectedAmount );
     });
     it("buy some from ico with ether", async function() {
@@ -100,6 +102,8 @@ contract('BoomstarterICO', async function(accounts) {
         // move to the first price
         currentTime += timeStep;
         await ico.setTime( currentTime );
+        await ico.setETHPriceManually( 30000, {from: owners[0]} );
+        await ico.setETHPriceManually( 30000, {from: owners[1]} );
 
         // buy cheap
         await ico.buy({from: buyers[1], value: web3.toWei(2, "ether")});
@@ -201,7 +205,21 @@ contract('BoomstarterICO', async function(accounts) {
         // call anything to trigger finish
         await ico.pause();
 
-        // now refund can be done
+        // refund should fail because no tokens approved
+        await expectThrow(fundsRegistry.withdrawPayments({from: buyers[1]}));
+
+        var half = await boomstarterTokenTestHelper.balanceOf(buyers[1])/2;
+
+        // approve half the tokens
+        await boomstarterTokenTestHelper.approve(fundsRegistry.address, half);
+
+        // refund should fail because not enough tokens approved
+        await expectThrow(fundsRegistry.withdrawPayments({from: buyers[1]}));
+
+        // approve full token balance
+        await boomstarterTokenTestHelper.approve(fundsRegistry.address, half*2, {from: buyers[1]});
+
+        // now the refund should come through
         await fundsRegistry.withdrawPayments({from: buyers[1]});
 
         // refund only investments in ether
@@ -209,5 +227,16 @@ contract('BoomstarterICO', async function(accounts) {
         var expectedEtherDifference = web3.toWei(2, "ether");
         assertBigNumberEqual(new web3.BigNumber(initialAmount - resultAmount),
                              new web3.BigNumber(expectedEtherDifference));
+
+
+        var originalOwnerTokens = await boomstarterTokenTestHelper.balanceOf(owners[2]);
+
+        // withdraw tokens from failed ico
+        ico.withdrawTokens( owners[2], 1e18, {from: owners[0]} );
+        ico.withdrawTokens( owners[2], 1e18, {from: owners[1]} );
+
+        var newOwnerTokens = await boomstarterTokenTestHelper.balanceOf(owners[2]);
+
+        assertBigNumberEqual(new web3.BigNumber(newOwnerTokens - originalOwnerTokens), 1e18);
     });
 });

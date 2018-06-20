@@ -5,13 +5,15 @@ import '../BoomstarterICO.sol';
 /// @title Helper for unit-testing BoomstarterICO - DONT use in production!
 contract BoomstarterICOTestHelper is BoomstarterICO {
 
-    function BoomstarterICOTestHelper(address[] _owners, address _token,
-                                      bool _production, address[] _previousSales)
+    function BoomstarterICOTestHelper(
+        address[] _owners,
+        address _token,
+        bool _production
+    )
         public
-        BoomstarterICO(_owners, _token, _production, _previousSales)
+        BoomstarterICO(_owners, _token, _production)
     {
         m_ETHPriceUpdateInterval = 5; // 5 seconds
-        c_MinInvestmentInCents = 1 * 100; // $1
         m_ETHPriceInCents = 300*100; // $300
         m_leeway = 0; // no offset
     }
@@ -26,6 +28,10 @@ contract BoomstarterICOTestHelper is BoomstarterICO {
 
     function setMaximumTokensSold(uint amount) public {
       c_maximumTokensSold = amount;
+    }
+
+    function setCap(uint cap) public {
+      c_softCapUsd = cap;
     }
 
     uint public m_time;

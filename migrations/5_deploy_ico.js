@@ -19,15 +19,13 @@ console.log("\x1b[34mDeploy ico\x1b[0m\n")
 var _owners;
 var _previousSales = [];
 var beneficiary;
+var previousFunds = 100;
+
 if (production) {
   _owners = [
       '0x7BFE571D5A5Ae244B5212f69952f3B19FF1B7e54',
       '0x386f2BD2808E96c8A23f698765dCdbe10D08F201',
       '0xB22D86AAC527A68327ECC99667e98429C2d4E2eb',
-  ];
-  _previousSales = [
-      '0x0C64f31DE90463f947F78a623E75414D0c4aC3f1',
-      '0xF6200480118179e3CCEDeF75738be7C62B356B6A'
   ];
 } else if (testnet) {
   _owners = [
@@ -51,15 +49,11 @@ if (production) {
 }
 
 const BoomstarterToken = artifacts.require('BoomstarterToken.sol');
-const BoomstarterPresale = artifacts.require('BoomstarterPresale.sol');
-const BoomstarterPreICO = artifacts.require('BoomstarterPreICO.sol');
 const BoomstarterICO = artifacts.require('BoomstarterICO.sol');
 const FundsRegistry = artifacts.require('FundsRegistry.sol');
-const TeamTokens = artifacts.require('TeamTokens.sol');
 
 var boomstarterToken;
 var fundRegistry;
-var teamTokens;
 var boomstarterIco;
 
 module.exports = function(deployer, network) {
@@ -67,24 +61,15 @@ module.exports = function(deployer, network) {
     return BoomstarterToken.deployed();
   }).then( function(token) {
     boomstarterToken = token;
-    return BoomstarterPresale.deployed();
-  }).then( function(presale) {
-    _previousSales[0] = presale.address;
-    return BoomstarterPreICO.deployed();
-  }).then( function(preICO) {
-    _previousSales[1] = preICO.address;
-    return deployer.deploy(BoomstarterICO, _owners, boomstarterToken.address, production || testnet || testnet_rinkeby, _previousSales);
+    return deployer.deploy(BoomstarterICO, _owners, boomstarterToken.address, production || testnet || testnet_rinkeby);
   }).then( function(ico) {
     boomstarterIco = ico;
-    return deployer.deploy(FundsRegistry, _owners, 2, ico.address);
-  }).then( function(funds) {
-    fundRegistry = funds;
-    return deployer.deploy(TeamTokens, _owners, 2, boomstarterIco.address, boomstarterToken.address);
-  }).then( function(team) {
-    teamTokens = team;
-    return boomstarterIco.init(fundRegistry.address, teamTokens.address);
+    return deployer.deploy(FundsRegistry, _owners, 2, ico.address, boomstarterToken.address);
   })
   // Do manually:
   // preIco.setNextSale( ico.address ) multisig
   // preIco.finishSale() multisig
+  // Then
+  // boomstarterIco.init(fundsRegistry.address, beneficiary, previousFunds) multisig
+  // token.setSale(fundsRegistry.address, true) multisig
 };
