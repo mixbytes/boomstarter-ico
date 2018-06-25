@@ -21,18 +21,19 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     }
 
     /// @dev triggers some state changes based on current time
-    /// @param investor optional refund parameter
+    /// @param client optional refund parameter
     /// @param payment optional refund parameter
+    /// @param refundable - if false, payment is made off-chain and shouldn't be refunded
     /// note: function body could be skipped!
-    modifier timedStateChange(address investor, uint payment) {
+    modifier timedStateChange(address client, uint payment, bool refundable) {
         if (IcoState.INIT == m_state && getTime() >= getStartTime())
             changeState(IcoState.ACTIVE);
 
         if (IcoState.ACTIVE == m_state && getTime() >= getFinishTime()) {
             finishICO();
 
-            if (payment > 0)
-                investor.transfer(payment);
+            if (refundable && payment > 0)
+                client.transfer(payment);
             // note that execution of further (but not preceding!) modifiers and functions ends here
         } else {
             _;
@@ -40,14 +41,15 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     }
 
     /// @dev automatic check for unaccounted withdrawals
-    /// @param investor optional refund parameter
+    /// @param client optional refund parameter
     /// @param payment optional refund parameter
-    modifier fundsChecker(address investor, uint payment) {
+    /// @param refundable - if false, payment is made off-chain and shouldn't be refunded
+    modifier fundsChecker(address client, uint payment, bool refundable) {
         uint atTheBeginning = m_funds.balance;
         if (atTheBeginning < m_lastFundsAmount) {
             changeState(IcoState.PAUSED);
-            if (payment > 0)
-                investor.transfer(payment);     // we cant throw (have to save state), so refunding this way
+            if (refundable && payment > 0)
+                client.transfer(payment);     // we cant throw (have to save state), so refunding this way
             // note that execution of further (but not preceding!) modifiers and functions ends here
         } else {
             _;
@@ -116,75 +118,75 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
 
     /// @notice register investments coming in different currencies
     /// @dev can only be called by a special controller account
-    /// @param investor Account to send tokens to
+    /// @param client Account to send tokens to
     /// @param etherEquivalentAmount Amount of ether to use to calculate token amount
-    function nonEtherBuy(address investor, uint etherEquivalentAmount)
+    function nonEtherBuy(address client, uint etherEquivalentAmount)
         public
     {
         require(msg.sender == m_nonEtherController);
-        internalBuy(investor, etherEquivalentAmount, false);
+        internalBuy(client, etherEquivalentAmount, false);
     }
 
     /// @dev common buy for ether and non-ether
-    /// @param investor who invests
+    /// @param client who invests
     /// @param payment how much ether
     /// @param refundable true if invested in ether - using buy()
-    function internalBuy(address investor, uint payment, bool refundable)
+    function internalBuy(address client, uint payment, bool refundable)
         internal
         nonReentrant
-        timedStateChange(investor, payment)
-        fundsChecker(investor, payment)
+        timedStateChange(client, payment, refundable)
+        fundsChecker(client, payment, refundable)
     {
         // don't allow to buy anything if price change was too long ago
         // effectively enforcing a sale pause
         require( !priceExpired() );
-        require(m_state == IcoState.ACTIVE || m_state == IcoState.INIT && isOwner(investor) /* for final test */);
+        require(m_state == IcoState.ACTIVE || m_state == IcoState.INIT && isOwner(client) /* for final test */);
 
         require((payment.mul(m_ETHPriceInCents)).div(1 ether) >= c_MinInvestmentInCents);
 
-        uint tokenCurrentPrice = getPrice();
+        uint amount = payment.mul(m_ETHPriceInCents).div(getPrice());
 
-        uint amount = payment.mul(m_ETHPriceInCents).div(tokenCurrentPrice);
-
-        // change in wei in case paid more than allowed
-        uint change;
+        uint actualPayment = payment;
 
         if (amount.add(m_currentTokensSold) > c_maximumTokensSold) {
             amount = c_maximumTokensSold.sub( m_currentTokensSold );
-            uint ethPerToken = tokenCurrentPrice.mul(1 ether).div(m_ETHPriceInCents);
-            payment = ethPerToken.mul(amount).div(1 ether);
-            change = payment.sub(amount);
+            actualPayment = getPrice().mul(amount).div(m_ETHPriceInCents);
         }
 
         // calculating a 20% bonus if the price of bought tokens is more than $50k
-        if (payment.mul(m_ETHPriceInCents).div(1 ether) >= 5000000) {
+        if (actualPayment.mul(m_ETHPriceInCents).div(1 ether) >= 5000000) {
             amount = amount.add(amount.div(5));
+            // for ICO, bonus cannot exceed hard cap
+            if (amount.add(m_currentTokensSold) > c_maximumTokensSold) {
+                amount = c_maximumTokensSold.sub(m_currentTokensSold);
+            }
         }
 
         // change ICO investment stats
-        m_currentUsdAccepted = m_currentUsdAccepted.add( amount.mul(tokenCurrentPrice).div(1 ether) );
+        m_currentUsdAccepted = m_currentUsdAccepted.add( actualPayment.mul(m_ETHPriceInCents).div(1 ether) );
         m_currentTokensSold = m_currentTokensSold.add( amount );
 
-        // send bought tokens to the investor
-        m_token.transfer(investor, amount);
+        // send bought tokens to the client
+        m_token.transfer(client, amount);
 
         if (refundable) {
             // record payment if paid in ether
-            m_funds.invested.value(payment)(investor, amount);
-            FundTransfer(investor, payment, true);
+            m_funds.invested.value(actualPayment)(client, amount);
+            FundTransfer(client, actualPayment, false);
         } else {
             // don't record if paid in different currency
-            FundTransfer(investor, payment, false);
+            FundTransfer(client, actualPayment, true);
         }
 
         // check if ICO must be closed early
-        if (change > 0)
-        {
+        if (payment.sub(actualPayment) > 0) {
             assert(c_maximumTokensSold == m_currentTokensSold);
             finishICO();
 
             // send change
-            investor.transfer(change);
+            client.transfer(payment.sub(actualPayment));
+        } else if (c_maximumTokensSold == m_currentTokensSold) {
+            finishICO();
         }
     }
 
@@ -194,13 +196,13 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     /// @notice get token price in cents depending on the current date
     function getPrice() public view returns (uint) {
         // skip finish date, start from the date of maximum price
-        for (uint i = c_priceChangeDates.length - 2; i >= 0; i--) {
+        for (uint i = c_priceChangeDates.length - 2; i > 0; i--) {
             if (getTime() > c_priceChangeDates[i]) {
               return c_tokenPrices[i];
             }
         }
-        // sale not started yet
-        return 0;
+        // default price is the cheapest, used for the initial test as well
+        return c_tokenPrices[0];
     }
 
     /// @notice start time of the ICO
@@ -219,7 +221,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     /// @notice pauses ICO
     function pause()
         external
-        timedStateChange(address(0), 0)
+        timedStateChange(address(0), 0, true)
         requiresState(IcoState.ACTIVE)
         onlyowner
     {
@@ -229,7 +231,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     /// @notice resume paused ICO
     function unpause()
         external
-        timedStateChange(address(0), 0)
+        timedStateChange(address(0), 0, true)
         requiresState(IcoState.PAUSED)
         onlymanyowners(keccak256(msg.data))
     {
@@ -254,7 +256,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     function setToken(address _token)
         external
         validAddress(_token)
-        timedStateChange(address(0), 0)
+        timedStateChange(address(0), 0, true)
         requiresState(IcoState.PAUSED)
         onlymanyowners(keccak256(msg.data))
     {
@@ -265,7 +267,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     function setFundsRegistry(address _funds)
         external
         validAddress(_funds)
-        timedStateChange(address(0), 0)
+        timedStateChange(address(0), 0, true)
         requiresState(IcoState.PAUSED)
         onlymanyowners(keccak256(msg.data))
     {
@@ -276,7 +278,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     function setNonEtherController(address _controller)
         external
         validAddress(_controller)
-        timedStateChange(address(0), 0)
+        timedStateChange(address(0), 0, true)
         onlymanyowners(keccak256(msg.data))
     {
         m_nonEtherController = _controller;
@@ -285,7 +287,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     /// @notice explicit trigger for timed state changes
     function checkTime()
         public
-        timedStateChange(address(0), 0)
+        timedStateChange(address(0), 0, true)
         onlyowner
     {
     }
@@ -340,7 +342,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     }
 
     function onFailure() private {
-        // allow investors to get their ether back 
+        // allow clients to get their ether back 
         m_funds.changeState(FundsRegistry.State.REFUNDING);
         m_funds.detachController();
     }
