@@ -173,9 +173,6 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
             // record payment if paid in ether
             m_funds.invested.value(actualPayment)(client, amount);
             FundTransfer(client, actualPayment, false);
-        } else {
-            // don't record if paid in different currency
-            FundTransfer(client, actualPayment, true);
         }
 
         // check if ICO must be closed early
