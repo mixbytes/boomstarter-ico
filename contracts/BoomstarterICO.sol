@@ -124,6 +124,8 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
         public
     {
         require(msg.sender == m_nonEtherController);
+        // just to check for input errors
+        require(msg.value <= 70000 ether);
         internalBuy(client, etherEquivalentAmount, false);
     }
 
@@ -144,6 +146,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
 
         require((payment.mul(m_ETHPriceInCents)).div(1 ether) >= c_MinInvestmentInCents);
 
+        // amount of bought tokens
         uint amount = payment.mul(m_ETHPriceInCents).div(getPrice());
 
         uint actualPayment = payment;
@@ -168,6 +171,8 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
 
         // send bought tokens to the client
         m_token.transfer(client, amount);
+
+        assert(m_currentTokensSold <= c_maximumTokensSold);
 
         if (refundable) {
             // record payment if paid in ether
