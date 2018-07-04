@@ -61,7 +61,7 @@ module.exports = function(deployer, network) {
     return BoomstarterToken.deployed();
   }).then( function(token) {
     boomstarterToken = token;
-    return deployer.deploy(BoomstarterICO, _owners, boomstarterToken.address, production || testnet || testnet_rinkeby );
+    return deployer.deploy(BoomstarterICO, _owners, boomstarterToken.address, production || testnet || testnet_rinkeby);
   }).then( function(ico) {
     boomstarterIco = ico;
     return deployer.deploy(FundsRegistry, _owners, 2, ico.address, boomstarterToken.address);

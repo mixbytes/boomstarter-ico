@@ -18,7 +18,7 @@ var production = false;
 
 Make sure ganache is running with enough accounts:
 
-    $ ganache-cli -a 8
+    $ ganache-cli -a 8 --gasPrice 200 -l 100000000 -e 100
 
 In order to run tests through ganache you need to have [ethereum-bridge](https://github.com/oraclize/ethereum-bridge). 
 Run it in active mode with the following command (from the ethereum-bridge dir):
