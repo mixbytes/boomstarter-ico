@@ -7,7 +7,6 @@ import './crowdsale/FundsRegistry.sol';
 import './IBoomstarterToken.sol';
 import '../minter-service/contracts/IICOInfo.sol';
 import '../minter-service/contracts/IMintableToken.sol';
-import '../minter-service/contracts/ReenterableMinter.sol';
 
 /// @title Boomstarter ICO contract
 contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent, IICOInfo, IMintableToken {
@@ -66,7 +65,8 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
 
     function estimate(uint256 _wei) public constant returns (uint tokens) {
         uint tokenCurrentPrice = getPrice();
-        uint amount = _wei.mul(m_ETHPriceInCents).div(tokenCurrentPrice);
+        uint amount;
+        (amount, ) = estimateTokensWithChange(_wei, tokenCurrentPrice);
         return amount;
     }
 
@@ -74,8 +74,27 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
         return m_token.balanceOf(addr);
 
     }
+
     function sentEtherBalanceOf(address addr) public constant returns (uint256 _wei) {
         return m_funds.m_weiBalances(addr);
+    }
+
+    function estimateTokensWithChange(uint256 payment, uint256 tokenCurrentPrice) public constant returns (uint tokens, uint change) {
+        tokens = payment.mul(m_ETHPriceInCents).div(tokenCurrentPrice);
+
+
+        if (tokens.add(m_currentTokensSold) > c_maximumTokensSold) {
+            tokens = c_maximumTokensSold.sub( m_currentTokensSold );
+            uint ethPerToken = tokenCurrentPrice.mul(1 ether).div(m_ETHPriceInCents);
+            payment = ethPerToken.mul(tokens).div(1 ether);
+            change = payment.sub(tokens);
+        }
+
+        // calculating a 20% bonus if the price of bought tokens is more than $50k
+        if (payment.mul(m_ETHPriceInCents).div(1 ether) >= 5000000) {
+            tokens = tokens.add(tokens.div(5));
+        }
+        return (tokens, change);
     }
 
 
@@ -167,23 +186,10 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
         require((payment.mul(m_ETHPriceInCents)).div(1 ether) >= c_MinInvestmentInCents);
 
         uint tokenCurrentPrice = getPrice();
-
-        uint amount = payment.mul(m_ETHPriceInCents).div(tokenCurrentPrice);
-
-        // change in wei in case paid more than allowed
+        uint amount;
         uint change;
 
-        if (amount.add(m_currentTokensSold) > c_maximumTokensSold) {
-            amount = c_maximumTokensSold.sub( m_currentTokensSold );
-            uint ethPerToken = tokenCurrentPrice.mul(1 ether).div(m_ETHPriceInCents);
-            payment = ethPerToken.mul(amount).div(1 ether);
-            change = payment.sub(amount);
-        }
-
-        // calculating a 20% bonus if the price of bought tokens is more than $50k
-        if (payment.mul(m_ETHPriceInCents).div(1 ether) >= 5000000) {
-            amount = amount.add(amount.div(5));
-        }
+        (amount, change) = estimateTokensWithChange(payment, tokenCurrentPrice);
 
         // change ICO investment stats
         m_currentUsdAccepted = m_currentUsdAccepted.add( amount.mul(tokenCurrentPrice).div(1 ether) );

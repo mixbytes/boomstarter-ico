@@ -149,6 +149,11 @@ contract('BoomstarterICO fail', async function(accounts) {
         var resultEstimate = await ico.estimate(web3.toWei(2, "ether"));
         assertBigNumberEqual(new web3.BigNumber(resultEstimate), new web3.BigNumber(expectedAmountOfTokens));
 
+        // estimate with with bonus
+        resultEstimate = await ico.estimate(web3.toWei(48000, "ether"));
+        assertBigNumberEqual(new web3.BigNumber(resultEstimate), new web3.BigNumber("21600000000000000000000000"));
+
+
         // check purchased token balance
         await ico.buy({from: buyers[2], value: web3.toWei(2, "ether")});
 
