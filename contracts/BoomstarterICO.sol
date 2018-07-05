@@ -71,7 +71,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
     }
 
     function isSaleActive() public constant returns (bool active) {
-        return m_state == IcoState.ACTIVE;
+        return m_state == IcoState.ACTIVE && !priceExpired();
     }
 
     function purchasedTokenBalanceOf(address addr) public constant returns (uint256 tokens) {
