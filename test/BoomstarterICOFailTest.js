@@ -166,26 +166,6 @@ contract('BoomstarterICO fail', async function(accounts) {
 
         assertBigNumberEqual(actualTokenBalance, expectedTokenBalance);
 
-        // check ether balance
-        var etherBalance = await ico.sentEtherBalanceOf(buyers[2]);
-
-
-        assertBigNumberEqual(
-            new web3.BigNumber(etherBalance),
-            new web3.BigNumber(web3.toWei(2, "ether")));
-
-        await ico.nonEtherBuy(buyers[2], web3.toWei(2, "ether"), {from: owners[1]});
-
-        etherBalance = await ico.sentEtherBalanceOf(buyers[2]);
-
-        var actualTokenBalanceAfterNonEtherBuy = await ico.purchasedTokenBalanceOf(buyers[2]);
-
-        assertBigNumberEqual(new web3.BigNumber(actualTokenBalanceAfterNonEtherBuy),
-                             new web3.BigNumber(expectedAmountOfTokens + expectedAmountOfTokens))
-
-        assertBigNumberEqual(
-                    new web3.BigNumber(etherBalance),
-                    new web3.BigNumber(web3.toWei(2, "ether")));
 
     });
 

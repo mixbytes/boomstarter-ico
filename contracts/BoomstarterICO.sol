@@ -65,37 +65,38 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
     }
 
     function estimate(uint256 _wei) public constant returns (uint tokens) {
-        uint tokenCurrentPrice = getPrice();
         uint amount;
-        (amount, ) = estimateTokensWithChange(_wei, tokenCurrentPrice);
+        (amount, ) = estimateTokensWithActualPayment(_wei);
         return amount;
+    }
+
+    function isSaleActive() public constant returns (bool active) {
+        return true;
     }
 
     function purchasedTokenBalanceOf(address addr) public constant returns (uint256 tokens) {
         return m_token.balanceOf(addr);
-
     }
 
-    function sentEtherBalanceOf(address addr) public constant returns (uint256 _wei) {
-        return m_funds.m_weiBalances(addr);
-    }
-
-    function estimateTokensWithChange(uint256 payment, uint256 tokenCurrentPrice) public constant returns (uint tokens, uint change) {
-        tokens = payment.mul(m_ETHPriceInCents).div(tokenCurrentPrice);
-
+    function estimateTokensWithActualPayment(uint256 _payment) public constant returns (uint amount, uint actualPayment) {
+        // amount of bought tokens
+        uint tokens = _payment.mul(m_ETHPriceInCents).div(getPrice());
 
         if (tokens.add(m_currentTokensSold) > c_maximumTokensSold) {
             tokens = c_maximumTokensSold.sub( m_currentTokensSold );
-            uint ethPerToken = tokenCurrentPrice.mul(1 ether).div(m_ETHPriceInCents);
-            payment = ethPerToken.mul(tokens).div(1 ether);
-            change = payment.sub(tokens);
+            _payment = getPrice().mul(tokens).div(m_ETHPriceInCents);
         }
 
         // calculating a 20% bonus if the price of bought tokens is more than $50k
-        if (payment.mul(m_ETHPriceInCents).div(1 ether) >= 5000000) {
+        if (_payment.mul(m_ETHPriceInCents).div(1 ether) >= 5000000) {
             tokens = tokens.add(tokens.div(5));
+            // for ICO, bonus cannot exceed hard cap
+            if (tokens.add(m_currentTokensSold) > c_maximumTokensSold) {
+                tokens = c_maximumTokensSold.sub(m_currentTokensSold);
+            }
         }
-        return (tokens, change);
+
+        return (tokens, _payment);
     }
 
 
@@ -187,29 +188,12 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
 
         require((payment.mul(m_ETHPriceInCents)).div(1 ether) >= c_MinInvestmentInCents);
 
-        // amount of bought tokens
-        uint amount = payment.mul(m_ETHPriceInCents).div(getPrice());
 
         uint actualPayment = payment;
-        uint tokenCurrentPrice = getPrice();
         uint amount;
-        uint change;
-        (amount, change) = estimateTokensWithChange(payment, tokenCurrentPrice);
 
+        (amount, actualPayment) = estimateTokensWithActualPayment(payment);
 
-        if (amount.add(m_currentTokensSold) > c_maximumTokensSold) {
-            amount = c_maximumTokensSold.sub( m_currentTokensSold );
-            actualPayment = getPrice().mul(amount).div(m_ETHPriceInCents);
-        }
-
-        // calculating a 20% bonus if the price of bought tokens is more than $50k
-        if (actualPayment.mul(m_ETHPriceInCents).div(1 ether) >= 5000000) {
-            amount = amount.add(amount.div(5));
-            // for ICO, bonus cannot exceed hard cap
-            if (amount.add(m_currentTokensSold) > c_maximumTokensSold) {
-                amount = c_maximumTokensSold.sub(m_currentTokensSold);
-            }
-        }
 
         // change ICO investment stats
         m_currentUsdAccepted = m_currentUsdAccepted.add( actualPayment.mul(m_ETHPriceInCents).div(1 ether) );
