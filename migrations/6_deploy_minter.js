@@ -73,9 +73,9 @@ module.exports = function(deployer, network) {
     boomstarterMinter = minter
     return boomstarterIco.setNonEtherController(boomstarterMinter.address, {from: _owners[0]})
 
-  }).then( function(funds) {
+  }).then( function() {
     return boomstarterIco.setNonEtherController(boomstarterMinter.address, {from: _owners[1]})
-  }).then( function(funds) {
+  }).then( function() {
     return boomstarterMinter.transferOwnership(minter_owner)
   })
 };
