@@ -1,7 +1,19 @@
 'use strict';
 
-const production = false;
-const testnet = false;
+const production = process.env.PRODUCTION != null ;
+const testnet = process.env.TESTNET != null;
+const testnet_rinkeby = process.env.TESTNET_RINKEBY != null;
+
+console.log(
+"\n\n\n\x1b[32m####################\n" +
+"Migration environment\n" +
+"production: " + (production) + "\n" +
+"testnet: " + (testnet) + "\n" +
+"testnet_rinkeby: " + (testnet_rinkeby) + "\n" +
+"####################\x1b[0m\n"
+)
+
+console.log("\x1b[31mDeploy token\x1b[0m\n")
 
 var _owners
 if (production) {
@@ -16,7 +28,13 @@ if (production) {
       '0x903030995e1cfd4e2f7a5399ed5d101c59b6a6e9',
       '0x3c832c4cb16ffee070334ed59e30e8d149556ef4',
   ];
-} else {
+} else if (testnet_rinkeby) {
+    _owners = [
+        '0xe4bebb493e6c7663e1f3c6b463c7b573bd051ccf',
+        '0x1462d1bbf707128437a17310fd784c24a1dda846',
+        '0x3bb48c702a5b67b58d93efa5043f186fe375fdb0'
+    ];
+  } else {
   _owners = [
       web3.eth.accounts[0],
       web3.eth.accounts[1],

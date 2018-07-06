@@ -1,0 +1,14 @@
+version: "2.2"
+
+services:
+  ganache:
+    build: ./docker
+    command: ./ganache-cli -a 8 --gasPrice 200 -l 100000000 -e 100
+    ports:
+      - 8545:8545
+
+  bridge:
+    build: ./docker
+    command: /bin/bash -c "cd /node_modules/ethereum-bridge && node bridge -H ganache:8545 --dev"
+    depends_on:
+      - ganache
