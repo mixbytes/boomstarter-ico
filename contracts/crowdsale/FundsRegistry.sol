@@ -142,7 +142,6 @@ contract FundsRegistry is ArgumentsChecker, MultiownedControlled, ReentrancyGuar
 
     function getInvestorsCount() external constant returns (uint) { return m_investors.length; }
 
-
     // FIELDS
 
     /// @notice total amount of investments in wei

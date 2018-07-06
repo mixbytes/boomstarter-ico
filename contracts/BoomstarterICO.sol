@@ -5,9 +5,11 @@ import 'zeppelin-solidity/contracts/ReentrancyGuard.sol';
 import './EthPriceDependent.sol';
 import './crowdsale/FundsRegistry.sol';
 import './IBoomstarterToken.sol';
+import '../minter-service/contracts/IICOInfo.sol';
+import '../minter-service/contracts/IMintableToken.sol';
 
 /// @title Boomstarter ICO contract
-contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent {
+contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent, IICOInfo, IMintableToken {
 
     enum IcoState { INIT, ACTIVE, PAUSED, FAILED, SUCCEEDED }
 
@@ -60,6 +62,41 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
                 m_lastFundsAmount = m_funds.balance;
             }
         }
+    }
+
+    function estimate(uint256 _wei) public constant returns (uint tokens) {
+        uint amount;
+        (amount, ) = estimateTokensWithActualPayment(_wei);
+        return amount;
+    }
+
+    function isSaleActive() public constant returns (bool active) {
+        return m_state == IcoState.ACTIVE && !priceExpired();
+    }
+
+    function purchasedTokenBalanceOf(address addr) public constant returns (uint256 tokens) {
+        return m_token.balanceOf(addr);
+    }
+
+    function estimateTokensWithActualPayment(uint256 _payment) public constant returns (uint amount, uint actualPayment) {
+        // amount of bought tokens
+        uint tokens = _payment.mul(m_ETHPriceInCents).div(getPrice());
+
+        if (tokens.add(m_currentTokensSold) > c_maximumTokensSold) {
+            tokens = c_maximumTokensSold.sub( m_currentTokensSold );
+            _payment = getPrice().mul(tokens).div(m_ETHPriceInCents);
+        }
+
+        // calculating a 20% bonus if the price of bought tokens is more than $50k
+        if (_payment.mul(m_ETHPriceInCents).div(1 ether) >= 5000000) {
+            tokens = tokens.add(tokens.div(5));
+            // for ICO, bonus cannot exceed hard cap
+            if (tokens.add(m_currentTokensSold) > c_maximumTokensSold) {
+                tokens = c_maximumTokensSold.sub(m_currentTokensSold);
+            }
+        }
+
+        return (tokens, _payment);
     }
 
 
@@ -116,6 +153,11 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
         internalBuy(msg.sender, msg.value, true);
     }
 
+    function mint(address investor, uint256 ethers) public {
+        nonEtherBuy(investor, ethers);
+    }
+
+
     /// @notice register investments coming in different currencies
     /// @dev can only be called by a special controller account
     /// @param client Account to send tokens to
@@ -146,24 +188,12 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
 
         require((payment.mul(m_ETHPriceInCents)).div(1 ether) >= c_MinInvestmentInCents);
 
-        // amount of bought tokens
-        uint amount = payment.mul(m_ETHPriceInCents).div(getPrice());
 
         uint actualPayment = payment;
+        uint amount;
 
-        if (amount.add(m_currentTokensSold) > c_maximumTokensSold) {
-            amount = c_maximumTokensSold.sub( m_currentTokensSold );
-            actualPayment = getPrice().mul(amount).div(m_ETHPriceInCents);
-        }
+        (amount, actualPayment) = estimateTokensWithActualPayment(payment);
 
-        // calculating a 20% bonus if the price of bought tokens is more than $50k
-        if (actualPayment.mul(m_ETHPriceInCents).div(1 ether) >= 5000000) {
-            amount = amount.add(amount.div(5));
-            // for ICO, bonus cannot exceed hard cap
-            if (amount.add(m_currentTokensSold) > c_maximumTokensSold) {
-                amount = c_maximumTokensSold.sub(m_currentTokensSold);
-            }
-        }
 
         // change ICO investment stats
         m_currentUsdAccepted = m_currentUsdAccepted.add( actualPayment.mul(m_ETHPriceInCents).div(1 ether) );
@@ -286,6 +316,14 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
         m_nonEtherController = _controller;
     }
 
+    function getNonEtherController()
+        public
+        view
+        returns (address)
+    {
+        return m_nonEtherController;
+    }
+
     /// @notice explicit trigger for timed state changes
     function checkTime()
         public
@@ -344,7 +382,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     }
 
     function onFailure() private {
-        // allow clients to get their ether back 
+        // allow clients to get their ether back
         m_funds.changeState(FundsRegistry.State.REFUNDING);
         m_funds.detachController();
     }
@@ -414,4 +452,5 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
 
     /// @dev save deployer for easier initialization
     address public m_deployer;
+
 }
