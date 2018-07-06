@@ -167,6 +167,9 @@ contract('BoomstarterICO fail', async function(accounts) {
         assertBigNumberEqual(actualTokenBalance, expectedTokenBalance);
 
 
+        // chack isSaleActive
+        assert(ico.isSaleActive())
+
     });
 
     it("check price update", async function() {
