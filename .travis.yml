@@ -8,12 +8,8 @@ node_js:
   - "7"
   - "8"
 
-
-install:
-  - npm install --only=dev
-
 script:
-  - make build  
+  - make test
 
 notifications:
   email:
