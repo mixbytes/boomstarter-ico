@@ -64,21 +64,21 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
         }
     }
 
-    function estimate(uint256 _wei) public constant returns (uint tokens) {
+    function estimate(uint256 _wei) public view returns (uint tokens) {
         uint amount;
         (amount, ) = estimateTokensWithActualPayment(_wei);
         return amount;
     }
 
-    function isSaleActive() public constant returns (bool active) {
+    function isSaleActive() public view returns (bool active) {
         return m_state == IcoState.ACTIVE && !priceExpired();
     }
 
-    function purchasedTokenBalanceOf(address addr) public constant returns (uint256 tokens) {
+    function purchasedTokenBalanceOf(address addr) public view returns (uint256 tokens) {
         return m_token.balanceOf(addr);
     }
 
-    function estimateTokensWithActualPayment(uint256 _payment) public constant returns (uint amount, uint actualPayment) {
+    function estimateTokensWithActualPayment(uint256 _payment) public view returns (uint amount, uint actualPayment) {
         // amount of bought tokens
         uint tokens = _payment.mul(m_ETHPriceInCents).div(getPrice());
 
@@ -153,8 +153,8 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent,
         internalBuy(msg.sender, msg.value, true);
     }
 
-    function mint(address investor, uint256 ethers) public {
-        nonEtherBuy(investor, ethers);
+    function mint(address client, uint256 ethers) public {
+        nonEtherBuy(client, ethers);
     }
 
 
