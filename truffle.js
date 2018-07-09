@@ -12,7 +12,14 @@ module.exports = {
       host: "localhost",
       port: 8545,
       network_id: "*", // Match any network id
-      gas: 4700000
+      gas: 47000000
+    },
+
+    rinkeby: {
+        host: "localhost",
+        port: 8545,
+        network_id: 4,
+        gasPrice: 1000000000
     },
 
     ropsten: {  // locally-run testnet

@@ -1,7 +1,19 @@
 'use strict';
 
-const production = false;
-const testnet = false;
+const production = process.env.PRODUCTION != null ;
+const testnet = process.env.TESTNET != null;
+const testnet_rinkeby = process.env.TESTNET_RINKEBY != null;
+
+console.log(
+"\n\n\n\x1b[32m####################\n" +
+"Migration environment\n" +
+"production: " + (production) + "\n" +
+"testnet: " + (testnet) + "\n" +
+"testnet_rinkeby: " + (testnet_rinkeby) + "\n" +
+"####################\x1b[0m\n"
+)
+
+console.log("\x1b[36mDeploy presale\x1b[0m\n")
 
 var _owners;
 var beneficiary;
@@ -19,7 +31,14 @@ if (production) {
       '0x3c832c4cb16ffee070334ed59e30e8d149556ef4',
   ];
   beneficiary = '0x47900c119370cc3ad78cbda6f39a0abc75e39ae1';
-} else {
+} else if (testnet_rinkeby) {
+   _owners = [
+       '0xe4bebb493e6c7663e1f3c6b463c7b573bd051ccf',
+       '0x1462d1bbf707128437a17310fd784c24a1dda846',
+       '0x3bb48c702a5b67b58d93efa5043f186fe375fdb0'
+   ];
+   beneficiary = '0x405bcc9dffef668ee1dbc09ff82158032823641f';
+ } else {
   _owners = [
       web3.eth.accounts[0],
       web3.eth.accounts[1],
@@ -40,7 +59,7 @@ if (!production) {
       return BoomstarterToken.deployed();
     }).then( function(token){
       boomstarterToken = token;
-      return deployer.deploy(BoomstarterPresale, _owners, token.address, beneficiary, testnet || production);
+      return deployer.deploy(BoomstarterPresale, _owners, token.address, beneficiary, testnet || production || testnet_rinkeby);
     }).then( function() {
       boomstarterPresaleAddress = BoomstarterPresale.address;
       // send all tokens to the presale contract
