@@ -3,7 +3,7 @@ version: "2.2"
 services:
   ganache:
     build: ./docker
-    command: ./ganache-cli -a 8 --gasPrice 200 -l 100000000 -e 100
+    command: ./ganache-cli -a 8 --gasPrice 200 -l 100000000 -e 100  --rpc --rpccorsdomain="*" --rpcaddr="ganache" --rpcport="8545" -h 0.0.0.0
     ports:
       - 8545:8545
 
