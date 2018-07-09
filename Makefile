@@ -3,7 +3,7 @@
 NPM_BIN := node_modules/.bin
 TEST_FILE:=
 
-node_modules:
+node_modules: package.json
 	npm install
 
 build: node_modules
