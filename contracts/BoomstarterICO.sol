@@ -2,12 +2,12 @@ pragma solidity 0.4.23;
 
 import 'mixbytes-solidity/contracts/security/ArgumentsChecker.sol';
 import 'zeppelin-solidity/contracts/ReentrancyGuard.sol';
-import './EthPriceDependent.sol';
+import './EthPriceDependentForICO.sol';
 import './crowdsale/FundsRegistry.sol';
 import './IBoomstarterToken.sol';
 
 /// @title Boomstarter ICO contract
-contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent {
+contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependentForICO {
 
     enum IcoState { INIT, ACTIVE, PAUSED, FAILED, SUCCEEDED }
 
@@ -65,7 +65,19 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
 
     // PUBLIC interface
 
-    function BoomstarterICO(address[] _owners, address _token, bool _production)
+    /**
+     * @dev constructor
+     * @param _owners addresses to do administrative actions
+     * @param _token address of token being sold
+     * @param _updateInterval time between oraclize price updates in seconds
+     * @param _production false if using testrpc/ganache, true otherwise
+     */
+    function BoomstarterICO(
+        address[] _owners,
+        address _token,
+        uint _updateInterval,
+        bool _production
+    )
         public
         payable
         EthPriceDependent(_owners, 2, _production)
@@ -75,6 +87,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
 
         m_token = IBoomstarterToken(_token);
         m_deployer = msg.sender;
+        m_ETHPriceUpdateInterval = _updateInterval;
     }
 
     /// @dev set addresses for ether and token storage
@@ -96,7 +109,10 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
         c_maximumTokensSold = m_token.balanceOf(this).sub( m_token.totalSupply().div(4) );
 
         // manually set how much should be sold taking into account previously collected
-        c_softCapUsd = c_softCapUsd.sub(_previouslySold);
+        if (_previouslySold < c_softCapUsd)
+            c_softCapUsd = c_softCapUsd.sub(_previouslySold);
+        else
+            c_softCapUsd = 0;
 
         // set account that allocates the rest of tokens after ico succeeds
         m_tokenDistributor = _tokenDistributor;
@@ -199,7 +215,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
     function getPrice() public view returns (uint) {
         // skip finish date, start from the date of maximum price
         for (uint i = c_priceChangeDates.length - 2; i > 0; i--) {
-            if (getTime() > c_priceChangeDates[i]) {
+            if (getTime() >= c_priceChangeDates[i]) {
               return c_tokenPrices[i];
             }
         }
@@ -254,17 +270,6 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
         m_token.transfer(_to, _amount);
     }
 
-    /// @notice In case we need to attach to existent token
-    function setToken(address _token)
-        external
-        validAddress(_token)
-        timedStateChange(address(0), 0, true)
-        requiresState(IcoState.PAUSED)
-        onlymanyowners(keccak256(msg.data))
-    {
-        m_token = IBoomstarterToken(_token);
-    }
-
     /// @notice In case we need to attach to existent funds
     function setFundsRegistry(address _funds)
         external
@@ -292,6 +297,19 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependent 
         timedStateChange(address(0), 0, true)
         onlyowner
     {
+    }
+
+    /// @notice send everything to the new (fixed) ico smart contract
+    /// @param newICO address of the new smart contract
+    function applyHotFix(address newICO)
+        public
+        validAddress(newICO)
+        requiresState(IcoState.PAUSED)
+        onlymanyowners(keccak256(msg.data))
+    {
+        EthPriceDependent next = EthPriceDependent(newICO);
+        next.topUp.value(this.balance)();
+        m_token.transfer(newICO, m_token.balanceOf(this));
     }
 
 

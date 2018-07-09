@@ -11,9 +11,8 @@ contract BoomstarterICOTestHelper is BoomstarterICO {
         bool _production
     )
         public
-        BoomstarterICO(_owners, _token, _production)
+        BoomstarterICO(_owners, _token, 5, _production)
     {
-        m_ETHPriceUpdateInterval = 5; // 5 seconds
         m_ETHPriceInCents = 300*100; // $300
         m_leeway = 0; // no offset
     }

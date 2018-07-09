@@ -3,10 +3,12 @@
 const production = false;
 const testnet = false;
 
+const updateInterval = 60*60; // 1 hour
+
 var _owners;
 var _previousSales = [];
 var beneficiary;
-var previousFunds = 100;
+const productionTokenAddress = "0x2Acb0BB95063756d66f67D0c9624b12CAc529fB3";
 
 if (production) {
   _owners = [
@@ -39,10 +41,15 @@ var boomstarterIco;
 
 module.exports = function(deployer, network) {
   deployer.then( function() {
-    return BoomstarterToken.deployed();
+    if (production) {
+      return BoomstarterToken.at(productionTokenAddress);
+    } else {
+      return BoomstarterToken.deployed();
+    }
   }).then( function(token) {
     boomstarterToken = token;
-    return deployer.deploy(BoomstarterICO, _owners, boomstarterToken.address, production || testnet);
+    return deployer.deploy(BoomstarterICO, _owners, boomstarterToken.address,
+                           updateInterval,  production || testnet);
   }).then( function(ico) {
     boomstarterIco = ico;
     return deployer.deploy(FundsRegistry, _owners, 2, ico.address, boomstarterToken.address);

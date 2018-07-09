@@ -8,7 +8,6 @@ const BoomstarterPresaleTestHelper = artifacts.require('BoomstarterPresaleTestHe
 const BoomstarterPreICOTestHelper = artifacts.require('BoomstarterPreICOTestHelper.sol');
 const BoomstarterICOTestHelper = artifacts.require('BoomstarterICOTestHelper.sol');
 const FundsRegistry = artifacts.require('FundsRegistry.sol');
-const TeamTokens = artifacts.require('TeamTokensTestHelper.sol');
 
 var boomstarterPresaleTestHelper;
 var boomstarterPreICOTestHelper;
