@@ -17,7 +17,8 @@ logs:
 	docker-compose logs -f 
 stop:
 	docker-compose down -t 1
-
+clean:
+	rm -rf build node_modules
 
 
 test: build start
