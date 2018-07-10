@@ -15,6 +15,6 @@ services:
       context: ./
       dockerfile: ./docker/Dockerfile
     command: /bin/bash -c "cd /node_modules/ethereum-bridge && node bridge -H ganache:8545 --dev"
-    restart: on-failure
+    restart: always
     depends_on:
       - ganache
