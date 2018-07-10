@@ -164,7 +164,7 @@ contract EthPriceDependent is usingOraclize, multiowned {
     uint public m_ETHPriceUpperBound = 100000000;
 
     /// @dev Update ETH price in cents every 12 hours
-    uint public m_ETHPriceUpdateInterval = 60*60*12;
+    uint public m_ETHPriceUpdateInterval = 60*60*1;
 
     /// @dev offset time inaccuracy when checking update expiration date
     uint public m_leeway = 900; // 15 minutes is the limit for miners
