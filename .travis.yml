@@ -2,9 +2,12 @@
 
 language: node_js
 dist: trusty
-sudo: false
+sudo: required
 git:
   submodules: false
+
+services:
+  - docker
 node_js:
   - "6"
   - "7"
