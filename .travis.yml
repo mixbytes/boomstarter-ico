@@ -21,6 +21,9 @@ before_script:
   - sleep 60
 
 script:
+  - docker-compose -v
+  - docker -v
+  - docker-compose logs
   - make test
 
 notifications:
