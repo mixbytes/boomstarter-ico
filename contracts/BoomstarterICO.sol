@@ -412,14 +412,14 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependentF
     ///         first one is the start time of sale
     ///         last one is the end of sale
     uint[] public c_priceChangeDates = [
-        1520000001, // start: $0.8
-        1530000000, // $1
-        1540000000, // $1.2
-        1550000000, // $1.4
-        1560000000, // $1.6
-        1570000000, // $1.8
-        1580000000, // $2.0
-        1590000000  // finish
+        1532898000, // start: July 30th 2018, 00:00:00 (GMT +3): $0.8
+        1533502800, // August 6th 2018, 00:00:00 (GMT +3): $1
+        1534107600, // August 13th 2018, 00:00:00 (GMT +3): $1.2
+        1534712400, // August 20th 2018, 00:00:00 (GMT +3): $1.4
+        1535317200, // August 27th 2018, 00:00:00 (GMT +3): $1.6
+        1535922000, // September 3rd 2018, 00:00:00 (GMT +3): $1.8
+        1536526800, // September 10th 2018, 00:00:00 (GMT +3): $2.0
+        1537736399  // finish: September 23rd 2018, 23:59:59 (GMT +3)
     ];
 
     /// @notice token prices in cents during different time periods
