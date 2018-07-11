@@ -23,8 +23,9 @@ var fundsRegistry;
 const totalSupply = 36e24; //36m tokens
 const production = false;
 
-var currentTime = 1520000000;
-var timeStep =       9999999;
+var preIcoTime =  1520000000;
+var currentTime = 1532897000;
+var timeStep =        604800;
 
 contract('BoomstarterICO fail', async function(accounts) {
   
@@ -41,7 +42,7 @@ contract('BoomstarterICO fail', async function(accounts) {
         // send everything to pre ico and set it as a current sale
         await boomstarterTokenTestHelper.transfer( preIco.address, totalSupply, {from: owners[0]});
         await boomstarterTokenTestHelper.switchToNextSale( preIco.address, {from: owners[0]} );
-        await preIco.setTime( currentTime );
+        await preIco.setTime( preIcoTime );
 
         // set eth price to $300
         await preIco.setETHPriceManually( 30000, {from: owners[0]} );
