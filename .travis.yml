@@ -9,8 +9,6 @@ git:
 services:
   - docker
 node_js:
-  - "6"
-  - "7"
   - "8"
 
 before_script:
