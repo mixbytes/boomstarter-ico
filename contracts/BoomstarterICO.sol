@@ -430,7 +430,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependentF
         1535922000, // September 3rd 2018, 00:00:00 (GMT +3): $1.6
         1536526800, // September 10th 2018, 00:00:00 (GMT +3): $1.8
         1537131600, // September 17th 2018, 00:00:00 (GMT +3): $2
-        1537736399  // finish: September 23rd 2018, 23:59:59 (GMT +3)
+        1538341199  // finish: September 30th 2018, 23:59:59 (GMT +3)
     ];
 
     /// @notice token prices in cents during different time periods
