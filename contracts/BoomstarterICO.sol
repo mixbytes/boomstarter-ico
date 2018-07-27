@@ -125,6 +125,7 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependentF
         m_token = IBoomstarterToken(_token);
         m_deployer = msg.sender;
         m_ETHPriceUpdateInterval = _updateInterval;
+        oraclize_setCustomGasPrice(40000000);
     }
 
     /// @dev set addresses for ether and token storage
@@ -422,13 +423,13 @@ contract BoomstarterICO is ArgumentsChecker, ReentrancyGuard, EthPriceDependentF
     ///         first one is the start time of sale
     ///         last one is the end of sale
     uint[] public c_priceChangeDates = [
-        1532898000, // start: July 30th 2018, 00:00:00 (GMT +3): $0.8
-        1533502800, // August 6th 2018, 00:00:00 (GMT +3): $1
-        1534107600, // August 13th 2018, 00:00:00 (GMT +3): $1.2
-        1534712400, // August 20th 2018, 00:00:00 (GMT +3): $1.4
-        1535317200, // August 27th 2018, 00:00:00 (GMT +3): $1.6
-        1535922000, // September 3rd 2018, 00:00:00 (GMT +3): $1.8
-        1536526800, // September 10th 2018, 00:00:00 (GMT +3): $2.0
+        getTime(),  // deployment date: $0.8
+        1534107600, // August 13th 2018, 00:00:00 (GMT +3): $1
+        1534712400, // August 20th 2018, 00:00:00 (GMT +3): $1.2
+        1535317200, // August 27th 2018, 00:00:00 (GMT +3): $1.4
+        1535922000, // September 3rd 2018, 00:00:00 (GMT +3): $1.6
+        1536526800, // September 10th 2018, 00:00:00 (GMT +3): $1.8
+        1537131600, // September 17th 2018, 00:00:00 (GMT +3): $2
         1537736399  // finish: September 23rd 2018, 23:59:59 (GMT +3)
     ];
 

@@ -6,7 +6,7 @@ contract EthPriceDependentForICO is EthPriceDependent {
 
     /// @dev overridden price lifetime logic
     function priceExpired() public view returns (bool) {
-        return (getTime() > m_ETHPriceLastUpdate + m_ETHPriceLifetime);
+        return false;
     }
 
     /// @dev how long before price becomes invalid
