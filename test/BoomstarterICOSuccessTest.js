@@ -95,9 +95,6 @@ contract('BoomstarterICO success', async function(accounts) {
 
         var initialAmount = await web3.eth.getBalance(fundsRegistry.address);
 
-        // it's not time yet
-        await expectThrow(ico.buy({from: buyers[1], value: web3.toWei(2, "ether")}));
-
         // move to the first price
         currentTime += timeStep;
         await ico.setTime( currentTime );
@@ -142,8 +139,8 @@ contract('BoomstarterICO success', async function(accounts) {
 
         var initialAmount = await web3.eth.getBalance(fundsRegistry.address);
 
-        // move to the second price
-        currentTime += timeStep;
+        // move to the second price (double the step since the first interval is ~ 2 weeks)
+        currentTime += timeStep*2;
         await ico.setTime( currentTime );
         await ico.setETHPriceManually( 30000, {from: owners[0]} );
         await ico.setETHPriceManually( 30000, {from: owners[1]} );

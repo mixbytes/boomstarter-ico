@@ -96,12 +96,6 @@ contract('BoomstarterICO fail', async function(accounts) {
 
         var initialAmount = await web3.eth.getBalance(fundsRegistry.address);
 
-        // it's not time yet
-        await expectThrow(ico.buy({from: buyers[1], value: web3.toWei(2, "ether")}));
-
-        // even though it's not time yet, owners can purchase tokens as a test
-        assertBigNumberEqual(await ico.getPrice(), 80);
-
         // move to the first price
         currentTime += timeStep;
         await ico.setTime( currentTime );
