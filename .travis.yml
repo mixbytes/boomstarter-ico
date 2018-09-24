@@ -15,14 +15,13 @@ before_script:
   - sed -i 's/git@github.com:/https:\/\/github.com\//' .gitmodules
   - git submodule update --init --recursive
   - make build
-  - make start  
+  - make start
   - sleep 60
 
 script:
-  - docker-compose -v
-  - docker -v
-  - docker-compose logs
-  - make test
+  - docker-compose -v &&
+    docker -v &&
+    make test
 
 notifications:
   email:
