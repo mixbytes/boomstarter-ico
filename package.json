@@ -24,7 +24,7 @@
     "babel-register": "^6.26.0",
     "ethereum-bridge": "0.6.1",
     "ganache-cli": "6.1.0",
-    "mixbytes-solidity": "^0.1.8",
+    "mixbytes-solidity": "0.1.8",
     "truffle": "4.1.8",
     "truffle-hdwallet-provider": "0.0.3",
     "zeppelin-solidity": "1.2.0"
