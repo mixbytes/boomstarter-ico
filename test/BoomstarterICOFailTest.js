@@ -261,8 +261,8 @@ contract('BoomstarterICO fail', async function(accounts) {
         var originalOwnerTokens = await boomstarterTokenTestHelper.balanceOf(owners[2]);
 
         // withdraw tokens from failed ico
-        ico.withdrawTokens( owners[2], 1e18, {from: owners[0]} );
-        ico.withdrawTokens( owners[2], 1e18, {from: owners[1]} );
+        await ico.withdrawTokens( owners[2], 1e18, {from: owners[0]} );
+        await ico.withdrawTokens( owners[2], 1e18, {from: owners[1]} );
 
         var newOwnerTokens = await boomstarterTokenTestHelper.balanceOf(owners[2]);
 
