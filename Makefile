@@ -1,7 +1,6 @@
 .PHONY: test logs
 
 NPM_BIN := node_modules/.bin
-TEST_FILE:=
 
 node_modules: package.json
 	npm install
