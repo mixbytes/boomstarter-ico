@@ -95,12 +95,16 @@ Full summary for convenience (modified Presale Summary):
 1. During deploy, BoomstarterICO automatically launches **updateEthPriceInCents()** and the first one is free. But keep in mind that first, the update will be completed after 1 hours, and second, when it's completed it's going to call delayed update once more. For this call to succeed you need to have your contract to have some ether for oraclize transactions. You can add ether by calling **topUp()** and specifying the amount of ether to send.
 2. If you provide ether before the first update, the update process will continue without any additional input from your part. If you don't - then update is most likely stopped: not enough ether to pay for an oraclize transaction. To start update again run **updateEthPriceInCents()**, it's payable, so you can provide some oraclize ether without calling **topUp()**. If the price is within the bounds, it is updated once contract gets reply from oraclize. If not - price is not updated, but another update request is still called. To change price bounds let owners call **setETHPriceUpperBound(uint _price)** / **setETHPriceLowerBound(uint _price)**. If you don't want or cannot start oraclize update, you can let owners call 
 **setETHPriceManually(uint _price)** to set price to any value (it's a backup option and not recommended + can only be called if price is expired or the update is not running)
-3. To check the price update status call either **priceExpired()** to check if the price was updated more than two update intervals ago, or **updateRequestExpired()**, which means update can be called once more. Note that **updateRequestExpired()** returning true doesn't mean, that the update stopped. The callback from oraclize might still come through and call update automatically, so it's adviced to rerun it taking into consideration oraclize lag.
+3. Ether price never expires (**priceExpired()** is always `false`). Call **updateRequestExpired()** to see if price update request can be made once more. Note that **updateRequestExpired()** returning true doesn't mean, that the update stopped. The callback from oraclize might still come through and call update automatically, so it's advised to rerun it taking into consideration oraclize lag.
 4. Before anything can be invested, preICO should be finished, then **init()** must be called to set funds and tokens controlling addresses and the sum of investments collected during previous sales.
 5. When price is ready, investors can call **buy()**, tokens will be assigned to the buyer, ether will be transferred to the FundsRegistry. The amount of tokens will be calculated from the token price (which depends on current date, call **getPrice()** to see current price) and the ether price, retrieved from oraclize or set by owners. NOTE: **buy()** cannot be called if **priceExpired()** returns `true`.
 6. Big investors (investing equal or more than $50k) receive a bonus of +20% tokens from the amount bought. Note, that the amount of an investment is calculated taking into account the sale cap (which 75% of the token's total supply, the rest should be allocated manually) and not just the amount of ether sent during investment transaction. If the resulting number of tokens bought (without bonus) exceeds the sale cap, maximum available amount is used instead, and the investor receives the ether remainder. The actual ether amount left is used to calculate if the investor should receive the bonus or not (bonus IS affected by the ICO cap, if not enough tokens left to cover bonus, then the investor will only receive what's left)
 7. Sale can be paused at any time by any of the owners using **pause()**. If ICO is paused, it cannot accept investments. To unpause it, owners should call **unpause()** with multisig.
 8. Sale can only be finished when the finish date has passed. State change happens during any transaction. Once the state becomes finished, the amount of USD collected gets compared to the soft cap. If the collected amount is more or equal than the soft cap, then ICO is successful, owners can withdraw ether from FundsRegistry, the rest of tokens is sent to the account, responsible for distributing them into pools. If the collected amount is less than the soft cap, then ICO is unsuccessful, owners cannot withdraw ether, but can now freely withdraw tokens left using **withdrawTokens()**, investors can refund their investments via FundsRegistry.
+
+### BoomstarterSale Summary
+
+The same as ICO, but with different bonus and finishing policies.
 
 ### FundsRegistry Summary
 
@@ -312,6 +316,14 @@ Output: true if expired
 Check if the last update request was sent more than 1 update interval ago. If `true` update can be called manually
 
 Output: true if expired
+
+### BoomstarterSale
+
+The same as ICO, but `init` function does't take `_previouslySold` argument. Also has an extra function:
+
+**finishICO()**
+
+Requires 2 owners' multisignature, immediately triggers sale conclusion.
 
 ### FundsRegistry
 
