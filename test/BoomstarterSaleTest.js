@@ -26,6 +26,7 @@ const BN = (n) => new web3.BigNumber(n);
 const totalSupply = 36e24; //36m tokens
 const production = false;
 var icoTokensSold = BN(0);
+var icoOnlyTokensSold;
 
 var icoTime = 1538341198;   // SEP 30, no bonuses
 
@@ -93,6 +94,8 @@ contract('BoomstarterSale', async function(accounts) {
         assertBigNumberEqual(await web3.eth.getBalance(fundsRegistry.address), web3.toWei(1, "ether"),
                 "balance must stay unchanged (bitcoin payment)");
         assertBigNumberEqual(await web3.eth.getBalance(ico.address), web3.toWei(200, "finney"));
+
+        icoOnlyTokensSold = icoTokensSold;
     });
 
     it("migrate to sale", async function() {
@@ -151,8 +154,24 @@ contract('BoomstarterSale', async function(accounts) {
 
         // checking other fields
         assertBigNumberEqual(await sale.m_currentTokensSold(), 0);
-        assertBigNumberEqual(await sale.c_maximumTokensSold(), BN(totalSupply).mul(75).div(100).sub(icoTokensSold));
+        assertBigNumberEqual(await sale.c_maximumTokensSold(), BN(totalSupply).mul(75).div(100).sub(icoOnlyTokensSold));
     });
+
+    async function checkNotSendingEther() {
+        await withRollback(async () => {
+            await fundsRegistry.sendEther(owners[2], web3.toWei(0.1, 'ether'), {from: owners[0]});
+            await expectThrow(fundsRegistry.sendEther(owners[2], web3.toWei(0.1, 'ether'), {from: owners[1]}));
+        });
+    }
+
+    async function checkNotWithdrawing() {
+        await withRollback(async () => {
+            const balance = (await boomstarterTokenTestHelper.balanceOf(buyers[2])).toString();
+            await boomstarterTokenTestHelper.approve(fundsRegistry.address,
+                    balance, {from: buyers[2]});
+            await expectThrow(fundsRegistry.withdrawPayments({from: buyers[2]}));
+        });
+    }
 
     it("buying during sale pre-stage", async function() {
         const initialBalance = await web3.eth.getBalance(fundsRegistry.address);
@@ -170,8 +189,10 @@ contract('BoomstarterSale', async function(accounts) {
         // check amount of ether collected
         assertBigNumberEqual((await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
                 web3.toWei(0.5, "ether"));
-    });
 
+        await checkNotSendingEther();
+        await checkNotWithdrawing();
+    });
 
     it("buy with bitcoin during sale pre-stage", async function() {
         const initialBalance = await web3.eth.getBalance(fundsRegistry.address);
@@ -200,6 +221,9 @@ contract('BoomstarterSale', async function(accounts) {
         await minter.mint(1, buyers[1], web3.toWei(2, "ether"), {from: owners[2]});
         assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[1])).sub(initialTokenBalance), tokens);
         assertBigNumberEqual(await web3.eth.getBalance(fundsRegistry.address), initialBalance);
+
+        await checkNotSendingEther();
+        await checkNotWithdrawing();
     });
 
     it("buying during sale with bonus", async function() {
@@ -210,6 +234,7 @@ contract('BoomstarterSale', async function(accounts) {
         await sale.buy({from: buyers[0], value: web3.toWei(1, "ether")});
 
         const tokens = BN(web3.toWei(230, "ether"));    // $2/token + 15%
+        icoTokensSold = icoTokensSold.add(tokens);
         assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[0])).sub(initialTokenBalance), tokens);
         assertBigNumberEqual((await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
                 web3.toWei(1, "ether"));
@@ -217,6 +242,7 @@ contract('BoomstarterSale', async function(accounts) {
         // in the middle of the period
         await sale.setTime(1539133506);
         await sale.buy({from: buyers[0], value: web3.toWei(1, "ether")});
+        icoTokensSold = icoTokensSold.add(tokens);
         assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[0])).sub(initialTokenBalance),
                 BN(tokens).mul(2));
         assertBigNumberEqual((await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
@@ -225,10 +251,14 @@ contract('BoomstarterSale', async function(accounts) {
         // in the end of the period
         await sale.setTime(1539550799);
         await sale.buy({from: buyers[0], value: web3.toWei(1, "ether")});
+        icoTokensSold = icoTokensSold.add(tokens);
         assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[0])).sub(initialTokenBalance),
                 BN(tokens).mul(3));
         assertBigNumberEqual((await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
                 BN(web3.toWei(1, "ether")).mul(3));
+
+        await checkNotSendingEther();
+        await checkNotWithdrawing();
     });
 
     it("buying during sale without bonuses", async function() {
@@ -251,48 +281,109 @@ contract('BoomstarterSale', async function(accounts) {
             assertBigNumberEqual((await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
                     BN(web3.toWei(1, "ether")).mul(2));
         });
+
+        await checkNotSendingEther();
+        await checkNotWithdrawing();
     });
 
-    /*it("finish-success", async function() {
+    async function checkFinished() {
+        assertBigNumberEqual(await sale.m_state(), 4);  // SUCCEEDED
+        assertBigNumberEqual(await fundsRegistry.m_state(), 2);  // SUCCEEDED
 
-        await ico.setCap(50000); // assume just $500 is enough
+        assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(sale.address), 0);
+        assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(beneficiary), BN(totalSupply).sub(icoTokensSold));
 
-        // time is up
-        currentTime += timeStep * 10;
-        await ico.setTime(currentTime);
+        // checking illegal access
+        for (const from_ of buyers)
+            await expectThrow(fundsRegistry.sendEther(from_, web3.toWei(4.5, 'ether'), {from: from_, gasPrice: 0}));
+    }
 
-        var initialAmount = await web3.eth.getBalance(fundsRegistry.address);
+    it("finishing with a call", async function() {
+        for (const from_ of buyers)
+            await expectThrow(sale.finishICO({from: from_}));
 
-        // try to get refund before finish
-        await expectThrow(fundsRegistry.withdrawPayments({from: buyers[1]}));
+        await withRollback(async () => {
+            await sale.finishICO({from: owners[0]});
+            await sale.finishICO({from: owners[1]});
 
-        var icoTokensLeft = await boomstarterTokenTestHelper.balanceOf(ico.address);
+            await checkFinished();
 
-        // call anything to trigger finish
-        await ico.pause();
+            assertBigNumberEqual(await web3.eth.getBalance(fundsRegistry.address), web3.toWei(4.5, 'ether'));
 
-        var investorTokens = await boomstarterTokenTestHelper.balanceOf(buyers[1]);
+            const initialBalance = await web3.eth.getBalance(owners[2]);
 
-        // approve full token balance
-        await boomstarterTokenTestHelper.approve(fundsRegistry.address, investorTokens, {from: buyers[1]});
+            await fundsRegistry.sendEther(owners[2], web3.toWei(4.5, 'ether'), {from: owners[0]});
+            assertBigNumberEqual(await web3.eth.getBalance(owners[2]), initialBalance);
+            await fundsRegistry.sendEther(owners[2], web3.toWei(4.5, 'ether'), {from: owners[1]});
+            assertBigNumberEqual(await web3.eth.getBalance(owners[2]), BN(initialBalance).add(web3.toWei(4.5, 'ether')));
 
-        // now the refund shouldn't succeed because the ico was successful
-        await expectThrow(fundsRegistry.withdrawPayments({from: buyers[1]}));
+            await checkNotWithdrawing();
+        });
+    });
 
-        // after finish ico should send all tokens to beneficiary account
-        assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(ico.address), 0);
+    it("finishing by hard cap", async function() {
+        await withRollback(async () => {
+            await sale.setTime(1541019600);
 
-        // all tokens transferred to pool allocator account
-        assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(beneficiary), icoTokensLeft)
+            await sale.setETHPriceManually(5000000000, {from: owners[0]});  // 1ETH = $50M
+            await sale.setETHPriceManually(5000000000, {from: owners[1]});
 
-        var originalOwnerBalance = await web3.eth.getBalance(owners[2]);
+            let initialBalance = await web3.eth.getBalance(fundsRegistry.address);
+            const initialBuyerBalance = await web3.eth.getBalance(buyers[1]);
+            const initialTokenBalance = await boomstarterTokenTestHelper.balanceOf(buyers[1]);
 
-        // owners can withdraw ether from fundsRegistry after ico succeeds
-        await fundsRegistry.sendEther(owners[2], 5e18, {from: owners[0]});
-        await fundsRegistry.sendEther(owners[2], 5e18, {from: owners[1]});
+            await sale.buy({from: buyers[1], value: web3.toWei(2, "ether"), gasPrice: 0});
 
-        var newOwnerBalance = await web3.eth.getBalance(owners[2]);
+            const tokensBought = BN(totalSupply).mul(75).div(100).sub(icoTokensSold);
+            icoTokensSold = icoTokensSold.add(tokensBought);
+            const etherSpent = tokensBought.mul(200).div(5000000000);
 
-        assertBigNumberEqual(new web3.BigNumber(newOwnerBalance - originalOwnerBalance), 5e18);
-    });*/
+            assertBigNumberEqual(BN(await sale.c_maximumTokensSold()).add(icoOnlyTokensSold), icoTokensSold);
+
+            await checkFinished();
+            icoTokensSold = icoTokensSold.sub(tokensBought);    // revert
+
+            // checking balances and tokens
+            assertBigNumberEqual(BN(await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
+                    etherSpent);
+            assertBigNumberEqual(BN(initialBuyerBalance).sub(await web3.eth.getBalance(buyers[1])), etherSpent);
+            assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[1])).sub(initialTokenBalance),
+                    tokensBought);
+
+            // can send collected ether
+            initialBalance = await web3.eth.getBalance(owners[2]);
+            await fundsRegistry.sendEther(owners[2], web3.toWei(4.5, 'ether'), {from: owners[0]});
+            await fundsRegistry.sendEther(owners[2], web3.toWei(4.5, 'ether'), {from: owners[1]});
+            assertBigNumberEqual(await web3.eth.getBalance(owners[2]), BN(initialBalance).add(web3.toWei(4.5, 'ether')));
+
+            await checkNotWithdrawing();
+        });
+    });
+
+    it("finishing by timeout", async function() {
+        await withRollback(async () => {
+            await sale.setTime(1893445200);
+
+            let initialBalance = await web3.eth.getBalance(fundsRegistry.address);
+            const initialBuyerBalance = await web3.eth.getBalance(buyers[1]);
+            const initialTokenBalance = await boomstarterTokenTestHelper.balanceOf(buyers[1]);
+
+            await sale.buy({from: buyers[1], value: web3.toWei(1, "ether"), gasPrice: 0});
+
+            await checkFinished();
+
+            // checking balances and tokens
+            assertBigNumberEqual(BN(await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance), 0);
+            assertBigNumberEqual(BN(initialBuyerBalance).sub(await web3.eth.getBalance(buyers[1])), 0);
+            assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[1])).sub(initialTokenBalance), 0);
+
+            // can send collected ether
+            initialBalance = await web3.eth.getBalance(owners[2]);
+            await fundsRegistry.sendEther(owners[2], web3.toWei(4.5, 'ether'), {from: owners[0]});
+            await fundsRegistry.sendEther(owners[2], web3.toWei(4.5, 'ether'), {from: owners[1]});
+            assertBigNumberEqual(await web3.eth.getBalance(owners[2]), BN(initialBalance).add(web3.toWei(4.5, 'ether')));
+
+            await checkNotWithdrawing();
+        });
+    });
 });
