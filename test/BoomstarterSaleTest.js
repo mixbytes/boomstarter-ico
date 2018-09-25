@@ -386,4 +386,19 @@ contract('BoomstarterSale', async function(accounts) {
             await checkNotWithdrawing();
         });
     });
+
+    it("applying hotfix", async function() {
+        await withRollback(async () => {
+            const sale2 = await BoomstarterSaleTestHelper.new(owners, boomstarterTokenTestHelper.address, production);
+            assert.notEqual(sale2, sale);
+
+            await sale.pause({from: owners[0]});
+            await sale.applyHotFix(sale2.address, {from: owners[0]});
+            await sale.applyHotFix(sale2.address, {from: owners[1]});
+
+            assertBigNumberEqual(await web3.eth.getBalance(sale2.address), web3.toWei(400, "finney"));
+            assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(sale2.address),
+                    BN(totalSupply).sub(icoTokensSold));
+        });
+    });
 });
