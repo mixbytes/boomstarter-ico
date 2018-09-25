@@ -27,9 +27,7 @@ const totalSupply = 36e24; //36m tokens
 const production = false;
 var icoTokensSold = BN(0);
 
-var icoTime =     1538341198;
-var currentTime = 1537800986;
-var timeStep =        604800;
+var icoTime = 1538341198;   // SEP 30, no bonuses
 
 contract('BoomstarterSale', async function(accounts) {
   
@@ -73,7 +71,7 @@ contract('BoomstarterSale', async function(accounts) {
 
         await ico.buy({from: buyers[0], value: web3.toWei(1, "ether")});
 
-        const tokens = new web3.BigNumber(web3.toWei(1, "ether")).mul(300).div(2);
+        const tokens = BN(web3.toWei(1, "ether")).mul(300).div(2);
         icoTokensSold = icoTokensSold.add(tokens);
         assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(buyers[0]), tokens);
 
@@ -87,7 +85,7 @@ contract('BoomstarterSale', async function(accounts) {
 
         await oldMinter.mint(1, buyers[1], web3.toWei(2, "ether"), {from: owners[0]});
 
-        const tokens = new web3.BigNumber(web3.toWei(2, "ether")).mul(300).div(2);
+        const tokens = BN(web3.toWei(2, "ether")).mul(300).div(2);
         icoTokensSold = icoTokensSold.add(tokens);
         assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(buyers[1]), tokens);
 
@@ -156,99 +154,106 @@ contract('BoomstarterSale', async function(accounts) {
         assertBigNumberEqual(await sale.c_maximumTokensSold(), BN(totalSupply).mul(75).div(100).sub(icoTokensSold));
     });
 
-/*    it("buy some from ico during first stage with ether", async function() {
+    it("buying during sale pre-stage", async function() {
+        const initialBalance = await web3.eth.getBalance(fundsRegistry.address);
+        assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(buyers[2]), 0);
 
-        var initialAmount = await web3.eth.getBalance(fundsRegistry.address);
+        await sale.setETHPriceManually(40000, {from: owners[0]});
+        await sale.setETHPriceManually(40000, {from: owners[1]});
 
-        // move to the first price
-        currentTime += timeStep;
-        await ico.setTime( currentTime );
-        await ico.setETHPriceManually( 30000, {from: owners[0]} );
-        await ico.setETHPriceManually( 30000, {from: owners[1]} );
+        await sale.buy({from: buyers[2], value: web3.toWei(0.5, "ether")});
 
-        // buy cheap
-        await ico.buy({from: buyers[1], value: web3.toWei(2, "ether")});
+        const tokens = BN(web3.toWei(100, "ether"));    // $2/token
+        icoTokensSold = icoTokensSold.add(tokens);
+        assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(buyers[2]), tokens);
 
-        // first stage, first price
-        var expectedAmountOfTokens = 300 * 2e18 / 0.8; // 750 bought
-        assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(buyers[1]), expectedAmountOfTokens);
-        // check amount of ether accepted by the funds registry
-        var expectedEtherDifference = 2e18;
-        var resultAmount = await web3.eth.getBalance(fundsRegistry.address);
-        assertBigNumberEqual(new web3.BigNumber(resultAmount - initialAmount),
-        new web3.BigNumber(expectedEtherDifference));
+        // check amount of ether collected
+        assertBigNumberEqual((await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
+                web3.toWei(0.5, "ether"));
     });
-    it("buy some from ico during first stage without ether", async function() {
-        var initialAmount = await web3.eth.getBalance(fundsRegistry.address);
 
-        // set controller for non-ether purchase
-        ico.setNonEtherController(owners[1], {from: owners[0]});
-        ico.setNonEtherController(owners[1], {from: owners[1]});
 
-        // not-controller cannot make non-ether purchase
-        await expectThrow(ico.nonEtherBuy(buyers[1], web3.toWei(3, "ether"), {from: owners[0]}));
+    it("buy with bitcoin during sale pre-stage", async function() {
+        const initialBalance = await web3.eth.getBalance(fundsRegistry.address);
+        const initialTokenBalance = await boomstarterTokenTestHelper.balanceOf(buyers[1]);
 
-        // controller can make non-ether purchase
-        await ico.nonEtherBuy(buyers[1], web3.toWei(3, "ether"), {from: owners[1]});
+        // checking for illegal access
+        for (const from_ of accounts)
+            await expectThrow(sale.mint(buyers[1], web3.toWei(4, "ether"), {from: from_}));
 
-        // ether shouldn't change
-        var resultAmount = await web3.eth.getBalance(fundsRegistry.address);
-        assertBigNumberEqual(new web3.BigNumber(resultAmount - initialAmount), 0);
+        for (const from_ of [owners[0], owners[1], buyers[0], buyers[1], buyers[2]])
+            await expectThrow(minter.mint(1, buyers[1], web3.toWei(4, "ether"), {from: from_}));
 
-        // token amount should still change
-        var expectedAmountOfTokens = 300 * 5e18 / 0.8; // 750 + 1125
+        await minter.mint(1, buyers[1], web3.toWei(4, "ether"), {from: owners[2]});
 
-        assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(buyers[1]), expectedAmountOfTokens);
+        const tokens = BN(web3.toWei(800, "ether"));
+        icoTokensSold = icoTokensSold.add(tokens);
+        assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[1])).sub(initialTokenBalance), tokens);
+
+        // check amount of ether collected
+        assertBigNumberEqual(await web3.eth.getBalance(fundsRegistry.address), initialBalance,
+                "balance must stay unchanged (bitcoin payment)");
+        assertBigNumberEqual(await web3.eth.getBalance(sale.address), web3.toWei(400, "finney"));
+
+        // repeated minting with the same id
+        await minter.mint(1, buyers[1], web3.toWei(4, "ether"), {from: owners[2]});
+        await minter.mint(1, buyers[1], web3.toWei(2, "ether"), {from: owners[2]});
+        assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[1])).sub(initialTokenBalance), tokens);
+        assertBigNumberEqual(await web3.eth.getBalance(fundsRegistry.address), initialBalance);
     });
-    it("buy some from ico during second stage with ether", async function() {
 
-        var initialAmount = await web3.eth.getBalance(fundsRegistry.address);
+    it("buying during sale with bonus", async function() {
+        const initialBalance = await web3.eth.getBalance(fundsRegistry.address);
+        const initialTokenBalance = await boomstarterTokenTestHelper.balanceOf(buyers[0]);
 
-        // move to the second price (double the step since the first interval is ~ 2 weeks)
-        currentTime += timeStep*2;
-        await ico.setTime( currentTime );
-        await ico.setETHPriceManually( 30000, {from: owners[0]} );
-        await ico.setETHPriceManually( 30000, {from: owners[1]} );
+        await sale.setTime(1538946000);
+        await sale.buy({from: buyers[0], value: web3.toWei(1, "ether")});
 
-        // buy a bit more expensive
-        await ico.buy({from: buyers[1], value: web3.toWei(2, "ether")});
+        const tokens = BN(web3.toWei(230, "ether"));    // $2/token + 15%
+        assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[0])).sub(initialTokenBalance), tokens);
+        assertBigNumberEqual((await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
+                web3.toWei(1, "ether"));
 
-        // first stage, first price
-        var expectedAmountOfTokens = 300 * 5e18 / 0.8 + 300 * 2e18 / 1; // 600 + 750 + 1125
-        assertBigNumberEqual(await boomstarterTokenTestHelper.balanceOf(buyers[1]), expectedAmountOfTokens);
-        // check amount of ether accepted by the funds registry
-        var expectedEtherDifference = 2e18;
-        var resultAmount = await web3.eth.getBalance(fundsRegistry.address);
-        assertBigNumberEqual(new web3.BigNumber(resultAmount - initialAmount),
-        new web3.BigNumber(expectedEtherDifference));
+        // in the middle of the period
+        await sale.setTime(1539133506);
+        await sale.buy({from: buyers[0], value: web3.toWei(1, "ether")});
+        assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[0])).sub(initialTokenBalance),
+                BN(tokens).mul(2));
+        assertBigNumberEqual((await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
+                BN(web3.toWei(1, "ether")).mul(2));
+
+        // in the end of the period
+        await sale.setTime(1539550799);
+        await sale.buy({from: buyers[0], value: web3.toWei(1, "ether")});
+        assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[0])).sub(initialTokenBalance),
+                BN(tokens).mul(3));
+        assertBigNumberEqual((await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
+                BN(web3.toWei(1, "ether")).mul(3));
     });
-    it("buy some with bonus", async function() {
 
-        var initialAmount = await web3.eth.getBalance(fundsRegistry.address);
+    it("buying during sale without bonuses", async function() {
+        await withRollback(async () => {
+            const initialBalance = await web3.eth.getBalance(fundsRegistry.address);
+            const initialTokenBalance = await boomstarterTokenTestHelper.balanceOf(buyers[1]);
 
-        // move to the second price
-        currentTime += timeStep;
-        await ico.setTime( currentTime );
+            await sale.setTime(1541019600);
+            await sale.buy({from: buyers[1], value: web3.toWei(1, "ether")});
 
-        // set eth price to $10k
-        await ico.setETHPriceManually( 1000000, {from: owners[0]} );
-        await ico.setETHPriceManually( 1000000, {from: owners[1]} );
+            const tokens = BN(web3.toWei(200, "ether"));    // $2/token
+            assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[1])).sub(initialTokenBalance), tokens);
+            assertBigNumberEqual((await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
+                    web3.toWei(1, "ether"));
 
-        // buy enough to get bonus
-        await ico.buy({from: buyers[1], value: web3.toWei(5, "ether")});
-
-        // buy additional tokens with bonus
-        var expectedAmountOfTokens = 300 * 5e18 / 0.8 + 300 * 2e18 / 1 + 10000 * 5e18; // 600 + 750 + 1125 + ...
-
-        assert.equal(await boomstarterTokenTestHelper.balanceOf(buyers[1]), expectedAmountOfTokens, "wrong token balance: got {0}".format(expectedAmountOfTokens));
-
-        // check amount of ether accepted by the funds registry
-        var expectedEtherDifference = 5e18;
-        var resultAmount = await web3.eth.getBalance(fundsRegistry.address);
-        assertBigNumberEqual(new web3.BigNumber(resultAmount - initialAmount),
-        new web3.BigNumber(expectedEtherDifference));
+            await sale.setTime(1730408400);
+            await sale.buy({from: buyers[1], value: web3.toWei(1, "ether")});
+            assertBigNumberEqual(BN(await boomstarterTokenTestHelper.balanceOf(buyers[1])).sub(initialTokenBalance),
+                    BN(tokens).mul(2));
+            assertBigNumberEqual((await web3.eth.getBalance(fundsRegistry.address)).sub(initialBalance),
+                    BN(web3.toWei(1, "ether")).mul(2));
+        });
     });
-    it("finish-success", async function() {
+
+    /*it("finish-success", async function() {
 
         await ico.setCap(50000); // assume just $500 is enough
 
