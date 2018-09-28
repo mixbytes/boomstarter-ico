@@ -17,9 +17,8 @@ module.exports = {
 
     rinkeby: {
         host: "localhost",
-        port: 8545,
-        network_id: 4,
-        gasPrice: 1000000000
+        port: 8547,
+        network_id: 4
     },
 
     ropsten: {  // locally-run testnet
